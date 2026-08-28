@@ -1,29 +1,124 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
-<groupbox
-  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
->
+<groupbox>
   <label><html:h2 data-l10n-id="pref-title"></html:h2></label>
   <checkbox
     id="zotero-prefpane-__addonRef__-enable"
     preference="enable"
     data-l10n-id="pref-enable"
   />
-  <hbox>
+</groupbox>
+<groupbox>
+  <label><html:h2 data-l10n-id="pref-api-header"></html:h2></label>
+  <hbox align="center">
     <html:label
-      for="zotero-prefpane-__addonRef__-input"
-      data-l10n-id="pref-input"
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-baseURL"
+      data-l10n-id="pref-baseurl"
     ></html:label>
     <html:input
       type="text"
-      id="zotero-prefpane-__addonRef__-input"
-      preference="input"
+      id="zotero-prefpane-__addonRef__-baseURL"
+      preference="baseURL"
+      flex="1"
     ></html:input>
   </hbox>
-  <hbox class="virtualized-table-container" flex="1" height="300px">
-    <html:div id="__addonRef__-table-container" />
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-apiKey"
+      data-l10n-id="pref-apikey"
+    ></html:label>
+    <html:input
+      type="password"
+      id="zotero-prefpane-__addonRef__-apiKey"
+      preference="apiKey"
+      flex="1"
+    ></html:input>
   </hbox>
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-model"
+      data-l10n-id="pref-model"
+    ></html:label>
+    <html:input
+      type="text"
+      id="zotero-prefpane-__addonRef__-model"
+      preference="model"
+      flex="1"
+    ></html:input>
+  </hbox>
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-temperature"
+      data-l10n-id="pref-temperature"
+    ></html:label>
+    <html:input
+      type="number"
+      step="0.1"
+      min="0"
+      max="2"
+      id="zotero-prefpane-__addonRef__-temperature"
+      preference="temperature"
+    ></html:input>
+  </hbox>
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-maxTokens"
+      data-l10n-id="pref-maxtokens"
+    ></html:label>
+    <html:input
+      type="number"
+      step="100"
+      min="0"
+      id="zotero-prefpane-__addonRef__-maxTokens"
+      preference="maxTokens"
+    ></html:input>
+  </hbox>
+</groupbox>
+<groupbox>
+  <label><html:h2 data-l10n-id="pref-context-header"></html:h2></label>
+  <checkbox
+    id="zotero-prefpane-__addonRef__-includeFullText"
+    preference="includeFullText"
+    data-l10n-id="pref-includefulltext"
+  />
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-fullTextLimit"
+      data-l10n-id="pref-fulltextlimit"
+    ></html:label>
+    <html:input
+      type="number"
+      step="1000"
+      min="0"
+      id="zotero-prefpane-__addonRef__-fullTextLimit"
+      preference="fullTextLimit"
+    ></html:input>
+  </hbox>
+  <html:label
+    for="zotero-prefpane-__addonRef__-systemPrompt"
+    data-l10n-id="pref-systemprompt"
+  ></html:label>
+  <html:textarea
+    id="zotero-prefpane-__addonRef__-systemPrompt"
+    preference="systemPrompt"
+    rows="3"
+  ></html:textarea>
+  <html:label
+    for="zotero-prefpane-__addonRef__-quickPrompts"
+    data-l10n-id="pref-quickprompts"
+  ></html:label>
+  <html:textarea
+    id="zotero-prefpane-__addonRef__-quickPrompts"
+    preference="quickPrompts"
+    rows="4"
+  ></html:textarea>
 </groupbox>
 <vbox>
   <html:label

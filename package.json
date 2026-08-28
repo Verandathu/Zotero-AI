@@ -1,14 +1,14 @@
 {
-  "name": "zotero-plugin-template",
+  "name": "zotero-ai",
   "type": "module",
-  "version": "3.1.0",
-  "description": "Zotero Plugin Template",
+  "version": "0.1.0",
+  "description": "AI assistant for Zotero: context-aware chat, full-text analysis, and quick actions",
   "config": {
-    "addonName": "Zotero Plugin Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate"
+    "addonName": "Zotero AI",
+    "addonID": "zoteroai@zixuwang",
+    "addonRef": "zoteroai",
+    "addonInstance": "ZoteroAI",
+    "prefsPrefix": "extensions.zotero.zoteroai"
   },
   "repository": {
     "type": "git",

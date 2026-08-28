@@ -1,0 +1,153 @@
+/* Zotero AI chat panel styles */
+.zoteroai-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+  gap: 4px;
+}
+
+.zoteroai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.zoteroai-mini-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.zoteroai-btn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zoteroai-btn-col button {
+  min-width: 44px;
+}
+
+.zoteroai-context-badge {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.zoteroai-conversation-select {
+  max-width: 140px;
+}
+
+.zoteroai-messages {
+  flex: 1;
+  min-height: 80px;
+  max-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 5px;
+}
+
+.zoteroai-msg {
+  max-width: 92%;
+  padding: 6px 9px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.zoteroai-msg-user {
+  align-self: flex-end;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.zoteroai-msg-assistant {
+  align-self: flex-start;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.zoteroai-msg-error {
+  align-self: center;
+  color: #c0392b;
+  font-size: 12px;
+  text-align: center;
+  background: none;
+  border: none;
+}
+
+.zoteroai-msg pre {
+  overflow-x: auto;
+  padding: 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.zoteroai-msg code {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.zoteroai-msg table {
+  border-collapse: collapse;
+}
+
+.zoteroai-msg td,
+.zoteroai-msg th {
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  padding: 2px 5px;
+}
+
+.zoteroai-msg .zoteroai-copy {
+  float: right;
+  font-size: 11px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  opacity: 0.6;
+}
+
+.zoteroai-msg .zoteroai-copy:hover {
+  opacity: 1;
+}
+
+.zoteroai-quick-prompts {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.zoteroai-quick-prompts button {
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zoteroai-input-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.zoteroai-input {
+  flex: 1;
+  resize: none;
+  min-height: 44px;
+  max-height: 160px;
+}
+
+.zoteroai-thinking {
+  opacity: 0.5;
+  font-style: italic;
+}
