@@ -160,7 +160,14 @@ export class ReaderSidebarInjector {
       btn.addEventListener("click", (e: any) => {
         e.preventDefault();
         e.stopPropagation();
-        this.activate(doc, content);
+        // Re-read content in case React re-created #sidebarContent since
+        // this listener was installed (stale-closure guard)
+        const liveContent = doc.getElementById(
+          "sidebarContent",
+        ) as HTMLElement | null;
+        if (liveContent) {
+          this.activate(doc, liveContent);
+        }
       });
     }
 
@@ -206,12 +213,16 @@ export class ReaderSidebarInjector {
     // the last native view the user was on stays visible.
     this.enforceViewVisibility(doc, content);
     // (Re)hook native view buttons so switching views hides our overlay.
-    // Read content fresh in the closure so a re-created element is handled.
-    for (const id of NATIVE_VIEW_IDS) {
+    // The clicked button tells us which view React is switching to — record
+    // it so deactivate/enforce restore the right wrapper even when React's
+    // className updates bail out on unchanged state.
+    for (let index = 0; index < NATIVE_VIEW_IDS.length; index++) {
+      const id = NATIVE_VIEW_IDS[index];
       const el = doc.getElementById(id) as any;
       if (el && !el._zoteroaiDeactivateHooked) {
         el._zoteroaiDeactivateHooked = true;
         el.addEventListener("click", () => {
+          this.lastNativeView = index;
           this.deactivate(doc);
         });
       }
@@ -228,9 +239,10 @@ export class ReaderSidebarInjector {
   /**
    * Map a native button index to its wrapper. Only the annotations wrapper
    * carries an id; thumbnails/outline wrappers are matched positionally.
-   * If the DOM doesn't match the expected shape, log once and fall back to
-   * showing nothing rather than controlling the wrong node.
+   * If the DOM doesn't match the expected shape, log ONCE (not per mutation)
+   * and fall back to showing nothing rather than controlling the wrong node.
    */
+  private loggedStructureWarning = false;
   private visibleWrapperIndex(
     buttonIndex: number,
     wrappers: HTMLElement[],
@@ -238,15 +250,17 @@ export class ReaderSidebarInjector {
     const annotationsIndex = wrappers.findIndex(
       (w) => w.id === "annotationsView",
     );
-    const expected = annotationsIndex >= 0 ? annotationsIndex : 1;
     // Structural sanity: thumbnails first, annotations next, outline last
     if (wrappers.length !== 3 || annotationsIndex !== 1) {
-      ztoolkit.log(
-        `Zotero AI: unexpected sidebar structure (${wrappers.length} wrappers, annotations at ${annotationsIndex})`,
-      );
+      if (!this.loggedStructureWarning) {
+        this.loggedStructureWarning = true;
+        ztoolkit.log(
+          `Zotero AI: unexpected sidebar structure (${wrappers.length} wrappers, annotations at ${annotationsIndex})`,
+        );
+      }
       return null;
     }
-    return buttonIndex === 0 ? 0 : buttonIndex === 1 ? expected : 2;
+    return buttonIndex === 0 ? 0 : buttonIndex === 1 ? annotationsIndex : 2;
   }
 
   /**
@@ -317,10 +331,15 @@ export class ReaderSidebarInjector {
     for (const wrapper of this.getNativeWrappers(content)) {
       wrapper.classList.add("hidden");
     }
-    void chatPanel?.mountReaderPanel(
-      panel.querySelector(".zoteroai-root") as HTMLElement,
-      doc,
-    );
+    ztoolkit.log("Zotero AI: activating chat panel");
+    chatPanel
+      ?.mountReaderPanel(
+        panel.querySelector(".zoteroai-root") as HTMLElement,
+        doc,
+      )
+      .catch((e: any) => {
+        ztoolkit.log("Zotero AI: mountReaderPanel failed", e);
+      });
   }
 
   private deactivate(doc: Document) {
