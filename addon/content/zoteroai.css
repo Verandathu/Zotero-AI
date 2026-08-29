@@ -88,6 +88,19 @@
   border: none;
 }
 
+.zoteroai-msg-reasoning {
+  align-self: flex-start;
+  opacity: 0.55;
+  font-style: italic;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+}
+
 .zoteroai-msg pre {
   overflow-x: auto;
   padding: 4px;

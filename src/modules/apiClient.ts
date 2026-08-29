@@ -7,6 +7,8 @@ export interface ChatMessage {
 
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
+  /** Chain-of-thought deltas from reasoning models (shown separately) */
+  onReasoning?: (text: string) => void;
   onDone: () => void;
   onError: (message: string) => void;
 }
@@ -83,10 +85,16 @@ export class ApiClient {
         return "";
       }
 
-      fullText = await this.consumeSSE(response, (delta) => {
-        fullText += delta;
-        callbacks.onDelta(delta);
-      });
+      fullText = await this.consumeSSE(
+        response,
+        (delta) => {
+          fullText += delta;
+          callbacks.onDelta(delta);
+        },
+        (reasoning) => {
+          callbacks.onReasoning?.(reasoning);
+        },
+      );
       callbacks.onDone();
       return fullText;
     } catch (e: any) {
@@ -109,6 +117,7 @@ export class ApiClient {
   private async consumeSSE(
     response: Response,
     onDelta: (text: string) => void,
+    onReasoning: (text: string) => void,
   ): Promise<string> {
     if (!response.body) {
       throw new Error("Empty response body");
@@ -138,10 +147,17 @@ export class ApiClient {
           }
           try {
             const parsed = JSON.parse(data);
-            const delta = parsed?.choices?.[0]?.delta?.content;
-            if (typeof delta === "string" && delta) {
-              fullText += delta;
-              onDelta(delta);
+            const delta = parsed?.choices?.[0]?.delta;
+            // Standard OpenAI delta content
+            if (typeof delta?.content === "string" && delta.content) {
+              fullText += delta.content;
+              onDelta(delta.content);
+            }
+            // Reasoning models (GLM, DeepSeek-R1, QwQ...) stream their chain
+            // of thought in `reasoning_content`; show it in the bubble but
+            // don't store it as the answer
+            if (typeof delta?.reasoning_content === "string" && delta.reasoning_content) {
+              onReasoning(delta.reasoning_content);
             }
             // Surface upstream errors delivered as SSE payloads
             if (parsed?.error?.message) {

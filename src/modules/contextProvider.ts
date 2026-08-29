@@ -175,10 +175,24 @@ export class ContextProvider {
     if (!attachment) {
       return "";
     }
-    // Indexed full text cached by Zotero's PDF worker
-    const content = await (Zotero.Fulltext as any).getItemContent(
-      attachment.id,
-    );
-    return typeof content === "string" ? content : "";
+    // Indexed full text cached by Zotero's PDF worker. Returns "" (not an
+    // error) when the item has no indexed content yet.
+    let content: unknown;
+    try {
+      content = await (Zotero.Fulltext as any).getItemContent(attachment.id);
+    } catch (e) {
+      ztoolkit.log("Zotero AI: getItemContent threw for attachment", attachment.id, e);
+      return "";
+    }
+    if (typeof content !== "string") {
+      // Not indexed yet — trigger asynchronous indexing for next time
+      try {
+        (Zotero.Fulltext as any).indexItems([attachment.id]);
+      } catch (e) {
+        // Ignore
+      }
+      return "";
+    }
+    return content;
   }
 }

@@ -481,7 +481,9 @@ export class ChatPanel {
     ];
 
     let streamed = "";
+    let reasoning = "";
     let el: HTMLElement | null = null;
+    let reasoningEl: HTMLElement | null = null;
     let lastRender = 0;
     await this.apiClient.chatStream(history, {
       onDelta: (delta) => {
@@ -503,6 +505,20 @@ export class ChatPanel {
         if (container) {
           container.scrollTop = container.scrollHeight;
         }
+      },
+      onReasoning: (delta) => {
+        reasoning += delta;
+        if (!container) {
+          return;
+        }
+        if (!reasoningEl) {
+          container.querySelector(".zoteroai-thinking")?.remove();
+          reasoningEl = this.el(ctx.doc, "div", "zoteroai-msg zoteroai-msg-reasoning");
+          container.appendChild(reasoningEl);
+        }
+        // Reasoning deltas arrive fast; textContent update is cheap
+        reasoningEl.textContent = reasoning;
+        container.scrollTop = container.scrollHeight;
       },
       onDone: () => {
         this.chatManager.updateLastAssistant(convID, streamed);
