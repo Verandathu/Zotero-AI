@@ -170,7 +170,6 @@ export class ApiClient {
       buffer += decoder
         ? decoder.decode(value, { stream: true })
         : String.fromCharCode(...new Uint8Array(value));
-      buffer += decoder.decode(value, { stream: true });
       // SSE events are separated by blank lines
       const events = buffer.split(/\r?\n\r?\n/);
       // Keep the last (possibly incomplete) chunk in the buffer
