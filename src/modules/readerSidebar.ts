@@ -15,11 +15,16 @@ const NATIVE_VIEW_IDS = ["viewThumbnail", "viewAnnotations", "viewOutline"];
  *
  * Injection is driven by tab "add" AND "select" notifier events: reader
  * iframes are created lazily when a tab is first viewed, so a tab may not
- * have a document yet when it is added.
+ * have a document yet when it is added. Observer creation is deduplicated
+ * per iframe window (WeakMap) so repeated tab switches don't pile up.
  */
 export class ReaderSidebarInjector {
   private notifierID?: string;
   private observers: any[] = [];
+  /** One body observer per reader iframe window (dedup across add/select) */
+  private mountedWindows = new WeakSet<any>();
+  /** Remember which native view was active before our panel took over */
+  private lastNativeView: number | null = null;
 
   register() {
     this.notifierID = Zotero.Notifier.registerObserver(
@@ -47,14 +52,7 @@ export class ReaderSidebarInjector {
       Zotero.Notifier.unregisterObserver(this.notifierID);
       this.notifierID = undefined;
     }
-    for (const ob of this.observers) {
-      try {
-        ob.disconnect();
-      } catch (e) {
-        // Reader document may already be gone
-      }
-    }
-    this.observers = [];
+    this.disconnectAll();
     // Remove injected UI from all open readers
     for (const reader of (Zotero.Reader as any)._readers || []) {
       try {
@@ -65,15 +63,34 @@ export class ReaderSidebarInjector {
         // Ignore
       }
     }
+    this.mountedWindows = new WeakSet();
+  }
+
+  private disconnectAll() {
+    for (const entry of this.observers) {
+      try {
+        entry.ob.disconnect();
+      } catch (e) {
+        // Reader document may already be gone
+      }
+      const content = entry.content;
+      if (content) {
+        delete (content as any)._zoteroaiEnforceObserver;
+      }
+    }
+    this.observers = [];
   }
 
   /**
    * Reader instances and their iframes appear asynchronously; retry until
-   * the tab resolves to a ready reader. Idempotent — tryMount guards by
-   * element ids.
+   * the tab resolves to a ready reader. Idempotent — deduped per window,
+   * and tryMount guards by element ids. Skips early once the plugin dies.
    */
   private async injectForTab(tabID: string, attempts = 10) {
     for (let i = 0; i < attempts; i++) {
+      if (!addon?.data.alive) {
+        return;
+      }
       const reader = Zotero.Reader.getByTabID(tabID);
       if (reader) {
         await this.inject(reader as any);
@@ -87,14 +104,19 @@ export class ReaderSidebarInjector {
     try {
       await reader._waitForReader();
       const win: any = reader._iframeWindow;
-      if (!win) {
+      if (!win || !addon?.data.alive) {
         return;
       }
-      const mount = () => this.tryMount(reader, win);
+      // Dedup: one body observer per reader document, ever
+      if (this.mountedWindows.has(win)) {
+        return;
+      }
+      this.mountedWindows.add(win);
+      const mount = () => this.tryMount(win);
       // The sidebar React tree renders lazily (only when opened) and may be
       // re-rendered; keep the injection alive through a MutationObserver.
-      const mo = new win.MutationObserver(() => mount());
-      this.observers.push(mo);
+      const mo = new win.MutationObserver(mount);
+      this.observers.push({ ob: mo, win });
       mo.observe(win.document.body, { childList: true, subtree: true });
       mount();
     } catch (e) {
@@ -102,12 +124,15 @@ export class ReaderSidebarInjector {
     }
   }
 
-  private tryMount(reader: any, win: any) {
+  private tryMount(win: any) {
+    if (!addon?.data.alive) {
+      return;
+    }
     const doc: Document = win.document;
     const toolbar = doc.querySelector(
       "#sidebarContainer .sidebar-toolbar .start",
     );
-    const content = doc.getElementById("sidebarContent");
+    const content = doc.getElementById("sidebarContent") as HTMLElement | null;
     if (!toolbar || !content) {
       return;
     }
@@ -135,7 +160,7 @@ export class ReaderSidebarInjector {
       btn.addEventListener("click", (e: any) => {
         e.preventDefault();
         e.stopPropagation();
-        this.activate(doc, btn, content as HTMLElement);
+        this.activate(doc, content);
       });
     }
 
@@ -149,12 +174,14 @@ export class ReaderSidebarInjector {
       panel = doc.createElement("div");
       panel.id = PANEL_ID;
       panel.className = "viewWrapper hidden";
+      // NOTE: no display in the inline style — visibility is driven purely
+      // by the .hidden class (see zoteroai.css #zoteroai-view-panel rules)
       panel.setAttribute(
         "style",
         "position:absolute;inset:0;z-index:10;background:var(--material-background);" +
-          "display:flex;flex-direction:column;-moz-user-select:text;user-select:text;",
+          "-moz-user-select:text;user-select:text;",
       );
-      (content as HTMLElement).setAttribute("style", "position:relative;");
+      content.style.position = "relative";
       content.appendChild(panel);
       const root = doc.createElement("div");
       root.className = "zoteroai-root";
@@ -171,20 +198,22 @@ export class ReaderSidebarInjector {
       }
     }
     // React re-renders can wipe the inline style keeping the overlay anchored
-    if (!(content as HTMLElement).style.position) {
-      (content as HTMLElement).style.position = "relative";
+    if (!content.style.position) {
+      content.style.position = "relative";
     }
     // Keep view visibility consistent on every sidebar mutation: while our
-    // overlay is active native views stay hidden; while inactive, exactly the
-    // native view whose button is active stays visible. React re-renders
-    // recompute wrapper classes from its own state — this corrects them.
-    this.enforceViewVisibility(doc, content as HTMLElement);
-    // (Re)hook native view buttons so switching views hides our overlay
+    // overlay is active native views stay hidden; while inactive, exactly
+    // the last native view the user was on stays visible.
+    this.enforceViewVisibility(doc, content);
+    // (Re)hook native view buttons so switching views hides our overlay.
+    // Read content fresh in the closure so a re-created element is handled.
     for (const id of NATIVE_VIEW_IDS) {
       const el = doc.getElementById(id) as any;
       if (el && !el._zoteroaiDeactivateHooked) {
         el._zoteroaiDeactivateHooked = true;
-        el.addEventListener("click", () => this.deactivate(doc));
+        el.addEventListener("click", () => {
+          this.deactivate(doc);
+        });
       }
     }
   }
@@ -197,45 +226,59 @@ export class ReaderSidebarInjector {
   }
 
   /**
-   * Native wrapper DOM order is [thumbnails, annotations, outline]; only the
-   * annotations wrapper carries an id, so map a button index to its wrapper.
+   * Map a native button index to its wrapper. Only the annotations wrapper
+   * carries an id; thumbnails/outline wrappers are matched positionally.
+   * If the DOM doesn't match the expected shape, log once and fall back to
+   * showing nothing rather than controlling the wrong node.
    */
-  private wrapperIndexFor(buttonIndex: number, wrappers: HTMLElement[]): number {
+  private visibleWrapperIndex(
+    buttonIndex: number,
+    wrappers: HTMLElement[],
+  ): number | null {
     const annotationsIndex = wrappers.findIndex(
       (w) => w.id === "annotationsView",
     );
-    if (buttonIndex === 0) {
-      return 0;
+    const expected = annotationsIndex >= 0 ? annotationsIndex : 1;
+    // Structural sanity: thumbnails first, annotations next, outline last
+    if (wrappers.length !== 3 || annotationsIndex !== 1) {
+      ztoolkit.log(
+        `Zotero AI: unexpected sidebar structure (${wrappers.length} wrappers, annotations at ${annotationsIndex})`,
+      );
+      return null;
     }
-    if (buttonIndex === 1) {
-      return annotationsIndex >= 0 ? annotationsIndex : 1;
-    }
-    return wrappers.length - 1;
+    return buttonIndex === 0 ? 0 : buttonIndex === 1 ? expected : 2;
   }
 
   /**
    * Observe the sidebar content and reconcile view visibility on every
    * mutation. Toggling to the same class value produces no mutation, so the
-   * observer loop always settles.
+   * observer loop always settles. The observer is tracked for unregister()
+   * (dev hot-reload would otherwise leave zombie observers).
    */
   private enforceViewVisibility(doc: Document, content: HTMLElement) {
     if ((content as any)._zoteroaiEnforceObserver) {
       return;
     }
     const enforce = () => {
-      const panelActive = !doc
-        .getElementById(PANEL_ID)
-        ?.classList.contains("hidden");
-      const activeBtn = NATIVE_VIEW_IDS.findIndex((id) =>
-        doc.getElementById(id)?.classList.contains("active"),
-      );
+      const panel = doc.getElementById(PANEL_ID);
+      const panelActive = !panel?.classList.contains("hidden");
       const wrappers = this.getNativeWrappers(content);
+      if (panelActive) {
+        for (const wrapper of wrappers) {
+          wrapper.classList.add("hidden");
+        }
+        return;
+      }
+      // Panel inactive: show the remembered native view, hide the rest.
+      // Never rely on the native buttons' .active classes — React bails
+      // out of className updates when its state is unchanged, so the DOM
+      // can desync from React's state; our own memory cannot.
+      const showIndex =
+        this.lastNativeView !== null
+          ? this.visibleWrapperIndex(this.lastNativeView, wrappers)
+          : null;
       wrappers.forEach((wrapper, i) => {
-        const visible =
-          !panelActive &&
-          activeBtn >= 0 &&
-          this.wrapperIndexFor(activeBtn, wrappers) === i;
-        wrapper.classList.toggle("hidden", !visible);
+        wrapper.classList.toggle("hidden", showIndex !== i);
       });
     };
     const ob = new (doc.defaultView as any).MutationObserver(enforce);
@@ -246,22 +289,29 @@ export class ReaderSidebarInjector {
       attributeFilter: ["class", "style"],
     });
     (content as any)._zoteroaiEnforceObserver = ob;
+    this.observers.push({ ob, content });
   }
 
-  private activate(
-    doc: Document,
-    btn: HTMLButtonElement,
-    content: HTMLElement,
-  ) {
+  private activate(doc: Document, content: HTMLElement) {
     const panel = doc.getElementById(PANEL_ID);
     if (!panel) {
       return;
     }
-    panel.classList.remove("hidden");
-    btn.classList.add("active");
-    for (const id of NATIVE_VIEW_IDS) {
-      doc.getElementById(id)?.classList.remove("active");
+    // Remember which native view was visible so deactivate can restore it
+    // without trusting React-managed .active classes
+    if (this.lastNativeView === null) {
+      const wrappers = this.getNativeWrappers(content);
+      const firstVisible = wrappers.findIndex(
+        (w) => !w.classList.contains("hidden"),
+      );
+      if (firstVisible >= 0) {
+        this.lastNativeView =
+          firstVisible === 0 ? 0 : firstVisible === 2 ? 2 : 1;
+      } else {
+        this.lastNativeView = 1; // annotations is the default view
+      }
     }
+    panel.classList.remove("hidden");
     // The enforceViewVisibility observer applies the same state immediately;
     // hide native views explicitly for a synchronous first paint
     for (const wrapper of this.getNativeWrappers(content)) {
@@ -275,21 +325,19 @@ export class ReaderSidebarInjector {
 
   private deactivate(doc: Document) {
     doc.getElementById(PANEL_ID)?.classList.add("hidden");
-    doc.getElementById(BTN_ID)?.classList.remove("active");
-    // Restore the native view whose button React keeps active. Wrappers for
-    // thumbnails and outline have no id attribute — map by DOM position.
+    // Restore the remembered native view (React's useState bails out on
+    // same-value className writes, so DOM .active classes cannot be trusted)
     const content = doc.getElementById("sidebarContent");
     if (!content) {
       return;
     }
-    const activeBtn = NATIVE_VIEW_IDS.findIndex((id) =>
-      doc.getElementById(id)?.classList.contains("active"),
-    );
     const wrappers = this.getNativeWrappers(content);
+    const showIndex =
+      this.lastNativeView !== null
+        ? this.visibleWrapperIndex(this.lastNativeView, wrappers)
+        : null;
     wrappers.forEach((wrapper, i) => {
-      const visible =
-        activeBtn >= 0 && this.wrapperIndexFor(activeBtn, wrappers) === i;
-      wrapper.classList.toggle("hidden", !visible);
+      wrapper.classList.toggle("hidden", showIndex !== i);
     });
   }
 }

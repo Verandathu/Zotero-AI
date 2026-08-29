@@ -25,6 +25,8 @@ export class ChatPanel {
 
   // One panel context per mounted UI (library section, reader overlay, ...)
   private panels = new Map<HTMLElement, PanelContext>();
+  /** True from click to stream end — closes the async double-send window */
+  private sending = false;
 
   register() {
     let result: false | string;
@@ -367,6 +369,9 @@ export class ChatPanel {
         input.value = input.value
           ? `${input.value}\n\n${selection}`
           : selection;
+        input.style.height = "auto";
+        input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+        this.syncEmptyState(ctx);
       }
     });
     container.appendChild(insertBtn);
@@ -553,9 +558,21 @@ export class ChatPanel {
   }
 
   private async send(ctx: PanelContext) {
-    if (this.apiClient.generating) {
+    // Synchronous in-flight guard: chatStream only sets its AbortController
+    // after several awaits (full-text extraction can take seconds), so
+    // apiClient.generating alone leaves a multi-second double-send window.
+    if (this.sending || this.apiClient.generating) {
       return;
     }
+    this.sending = true;
+    try {
+      await this.sendInternal(ctx);
+    } finally {
+      this.sending = false;
+    }
+  }
+
+  private async sendInternal(ctx: PanelContext) {
     const input = ctx.body.querySelector(
       ".zoteroai-input",
     ) as HTMLTextAreaElement;
@@ -596,12 +613,17 @@ export class ChatPanel {
     if (input) {
       input.value = "";
       input.style.height = "auto";
+      this.syncEmptyState(ctx);
     }
     if (container) {
       container.querySelector(".zoteroai-thinking")?.remove();
       const userEl = this.createMessageElement(ctx, "user", content);
       container.appendChild(userEl);
-      const pending = this.el(ctx.doc, "div", "zoteroai-msg zoteroai-msg-assistant");
+      const pending = this.el(
+        ctx.doc,
+        "div",
+        "zoteroai-msg zoteroai-msg-assistant",
+      );
       const dots = this.el(ctx.doc, "div", "zoteroai-thinking-dots");
       for (let i = 0; i < 3; i++) {
         dots.appendChild(this.el(ctx.doc, "span"));
@@ -613,10 +635,20 @@ export class ChatPanel {
       userEl.scrollIntoView({ block: "end" });
     }
 
+    // History for THIS conversation — not chatManager.active, which the user
+    // may have switched away from during the buildContext await
+    const convNow = this.chatManager.list.find((c) => c.id === convID);
+    if (!convNow) {
+      // Conversation was deleted mid-window
+      container
+        ?.querySelector(".zoteroai-thinking-dots")
+        ?.parentElement?.remove();
+      return;
+    }
     this.setGeneratingUI(ctx, true);
     const history: ChatMessage[] = [
       { role: "system", content: this.buildSystemPrompt(itemCtx) },
-      ...this.chatManager.active!.messages.filter((m) => m.role !== "system"),
+      ...convNow.messages.filter((m) => m.role !== "system"),
     ];
 
     let streamed = "";
@@ -662,13 +694,20 @@ export class ChatPanel {
         collapseReasoning();
         if (!el && container) {
           container.querySelector(".zoteroai-thinking")?.remove();
-          container.querySelector(".zoteroai-thinking-dots")?.parentElement?.remove();
+          container
+            .querySelector(".zoteroai-thinking-dots")
+            ?.parentElement?.remove();
           el = this.createMessageElement(ctx, "assistant", streamed);
           el.classList.add("zoteroai-streaming");
           container.appendChild(el);
           lastRender = now;
         } else if (el && now - lastRender >= 100) {
-          // Throttle markdown re-rendering during streaming
+          // Throttle markdown re-rendering during streaming. Skip DOM work
+          // entirely when the message element was detached (conversation
+          // switched / section re-rendered) — persistence still happens.
+          if (!el.isConnected) {
+            return;
+          }
           lastRender = now;
           const rendered = el.querySelector(
             '[data-role="zoteroai-markdown"]',
@@ -677,7 +716,7 @@ export class ChatPanel {
             this.renderMarkdown(ctx, rendered, streamed);
           }
         }
-        if (container && nearBottom()) {
+        if (container && el?.isConnected && nearBottom()) {
           container.scrollTop = container.scrollHeight;
         }
       },
@@ -698,7 +737,11 @@ export class ChatPanel {
           );
           container.appendChild(reasoningEl);
         }
-        // Reasoning deltas arrive fast; textContent update is cheap
+        // Reasoning deltas arrive fast; textContent update is cheap.
+        // Same detachment guard as onDelta.
+        if (!reasoningEl.isConnected) {
+          return;
+        }
         reasoningEl.textContent = reasoning;
         if (nearBottom()) {
           container.scrollTop = container.scrollHeight;
@@ -714,8 +757,10 @@ export class ChatPanel {
         // Persist the assistant reply (created/updated in the store here —
         // during streaming the UI shows it but the store isn't touched)
         this.chatManager.setLastAssistant(convID, streamed);
-        // Final full render
-        if (el && container) {
+        // Final full render — only when the element is still in the live
+        // document (a conversation switch detaches it; renderMessages will
+        // show the persisted copy on next render)
+        if (el && container && el.isConnected) {
           const rendered = el.querySelector(
             '[data-role="zoteroai-markdown"]',
           ) as HTMLElement;
@@ -726,7 +771,6 @@ export class ChatPanel {
             container.scrollTop = container.scrollHeight;
           }
         }
-        this.renderToolbar(ctx, this.contextProvider.getCurrentItem());
       },
       onError: (message) => {
         this.setGeneratingUI(ctx, false);
@@ -744,7 +788,9 @@ export class ChatPanel {
         if (streamed) {
           this.chatManager.setLastAssistant(convID, streamed);
         }
-        if (container) {
+        // Surface the error in the live panel only if this conversation is
+        // still the one being viewed
+        if (container && this.chatManager.active?.id === convID) {
           container.appendChild(
             this.createMessageElement(ctx, "error", message),
           );
@@ -752,6 +798,18 @@ export class ChatPanel {
         }
       },
     });
+  }
+
+  /**
+   * Sync the send button's dimmed state after programmatic input.value
+   * writes (quick prompts, insert-selection) that bypass input events.
+   */
+  private syncEmptyState(ctx: PanelContext) {
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    const btn = ctx.body.querySelector(".zoteroai-btn-action");
+    btn?.classList.toggle("zoteroai-empty", !input?.value.trim());
   }
 
   private async sendSelectionPrompt(ctx: PanelContext, promptTemplate: string) {
