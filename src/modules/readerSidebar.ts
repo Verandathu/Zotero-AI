@@ -142,6 +142,15 @@ export class ReaderSidebarInjector {
       root.className = "zoteroai-root";
       panel.appendChild(root);
     }
+    // React re-renders can wipe the inline style keeping the overlay anchored
+    if (!(content as HTMLElement).style.position) {
+      (content as HTMLElement).style.position = "relative";
+    }
+    // While our overlay is active, keep native views hidden — React
+    // re-renders recompute their .hidden classes from its own state and
+    // would resurface them beneath the overlay. Enforce our state on every
+    // sidebar mutation.
+    this.enforceWhileActive(doc, content as HTMLElement);
     // (Re)hook native view buttons so switching views hides our overlay
     for (const id of NATIVE_VIEW_IDS) {
       const el = doc.getElementById(id) as any;
@@ -150,6 +159,42 @@ export class ReaderSidebarInjector {
         el.addEventListener("click", () => this.deactivate(doc));
       }
     }
+  }
+
+  /**
+   * Observe the sidebar content; while the AI overlay is active, re-assert
+   * the hidden state on native view wrappers whenever React re-renders them.
+   * When the overlay is inactive, make sure it stays hidden.
+   */
+  private enforceWhileActive(doc: Document, content: HTMLElement) {
+    if ((content as any)._zoteroaiEnforceObserver) {
+      return;
+    }
+    const isActive = () =>
+      !doc.getElementById(PANEL_ID)?.classList.contains("hidden");
+    const enforce = () => {
+      const panelActive = isActive();
+      const activeBtnId = NATIVE_VIEW_IDS.find((id) =>
+        doc.getElementById(id)?.classList.contains("active"),
+      );
+      for (const wrapper of content.querySelectorAll(":scope > .viewWrapper")) {
+        if (wrapper.id === PANEL_ID) {
+          continue;
+        }
+        // Native views visible only when our overlay is hidden AND the
+        // corresponding native button is active
+        const shouldBeVisible = !panelActive && wrapper.id === activeBtnId;
+        wrapper.classList.toggle("hidden", !shouldBeVisible);
+      }
+    };
+    const ob = new (doc.defaultView as any).MutationObserver(enforce);
+    ob.observe(content, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+    (content as any)._zoteroaiEnforceObserver = ob;
   }
 
   private activate(
@@ -166,7 +211,9 @@ export class ReaderSidebarInjector {
     for (const id of NATIVE_VIEW_IDS) {
       doc.getElementById(id)?.classList.remove("active");
     }
-    // Hide the native views so they don't scroll out beneath the overlay
+    // Hide the native views so they don't scroll out beneath the overlay.
+    // The MutationObserver in enforceWhileActive keeps this state enforced
+    // against React re-renders.
     for (const wrapper of content.querySelectorAll(":scope > .viewWrapper")) {
       if (wrapper.id !== PANEL_ID) {
         wrapper.classList.add("hidden");
@@ -182,23 +229,35 @@ export class ReaderSidebarInjector {
     const panel = doc.getElementById(PANEL_ID);
     panel?.classList.add("hidden");
     doc.getElementById(BTN_ID)?.classList.remove("active");
-    // Restore whichever native view React considers active (its button keeps
-    // the .active class), so the sidebar returns to the previous view
+    // Restore the native view whose button React keeps active. Wrappers for
+    // thumbnails and outline have no id attribute — match them by position:
+    // they are the direct .viewWrapper children of #sidebarContent in the
+    // order [thumbnails, annotations(id=annotationsView), outline].
+    const content = doc.getElementById("sidebarContent");
+    if (!content) {
+      return;
+    }
     const activeId = NATIVE_VIEW_IDS.find(
       (id) => doc.getElementById(id)?.classList.contains("active"),
     );
-    const content = doc.getElementById("sidebarContent");
-    if (content) {
-      for (const wrapper of content.querySelectorAll(":scope > .viewWrapper")) {
-        if (wrapper.id === PANEL_ID) {
-          continue;
-        }
-        wrapper.classList.toggle(
-          "hidden",
-          activeId ? !wrapper.matches(`#${activeId}`) : true,
-        );
-      }
-    }
+    const wrappers = [
+      ...content.querySelectorAll(":scope > .viewWrapper"),
+    ].filter((w) => w.id !== PANEL_ID);
+    const annotationsIndex = wrappers.findIndex(
+      (w) => w.id === "annotationsView",
+    );
+    const nativeIndex = activeId
+      ? NATIVE_VIEW_IDS.indexOf(activeId)
+      : 1; // default to annotations
+    const domIndex =
+      nativeIndex === 0
+        ? 0
+        : nativeIndex === 1
+          ? annotationsIndex
+          : wrappers.length - 1;
+    wrappers.forEach((wrapper, index) => {
+      wrapper.classList.toggle("hidden", index !== domIndex);
+    });
   }
 }
 
