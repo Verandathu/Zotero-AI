@@ -166,6 +166,12 @@ export class ReaderSidebarInjector {
     for (const id of NATIVE_VIEW_IDS) {
       doc.getElementById(id)?.classList.remove("active");
     }
+    // Hide the native views so they don't scroll out beneath the overlay
+    for (const wrapper of content.querySelectorAll(":scope > .viewWrapper")) {
+      if (wrapper.id !== PANEL_ID) {
+        wrapper.classList.add("hidden");
+      }
+    }
     void chatPanel?.mountReaderPanel(
       panel.querySelector(".zoteroai-root") as HTMLElement,
       doc,
@@ -173,8 +179,26 @@ export class ReaderSidebarInjector {
   }
 
   private deactivate(doc: Document) {
-    doc.getElementById(PANEL_ID)?.classList.add("hidden");
+    const panel = doc.getElementById(PANEL_ID);
+    panel?.classList.add("hidden");
     doc.getElementById(BTN_ID)?.classList.remove("active");
+    // Restore whichever native view React considers active (its button keeps
+    // the .active class), so the sidebar returns to the previous view
+    const activeId = NATIVE_VIEW_IDS.find(
+      (id) => doc.getElementById(id)?.classList.contains("active"),
+    );
+    const content = doc.getElementById("sidebarContent");
+    if (content) {
+      for (const wrapper of content.querySelectorAll(":scope > .viewWrapper")) {
+        if (wrapper.id === PANEL_ID) {
+          continue;
+        }
+        wrapper.classList.toggle(
+          "hidden",
+          activeId ? !wrapper.matches(`#${activeId}`) : true,
+        );
+      }
+    }
   }
 }
 
