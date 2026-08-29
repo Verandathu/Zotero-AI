@@ -1,7 +1,10 @@
 import { getString, initLocale } from "./utils/locale";
 import { createZToolkit } from "./utils/ztoolkit";
 import { ChatPanel } from "./modules/chatPanel";
-import { ReaderSidebarInjector, setChatPanelRef } from "./modules/readerSidebar";
+import {
+  ReaderSidebarInjector,
+  setChatPanelRef,
+} from "./modules/readerSidebar";
 
 let chatPanel: ChatPanel | undefined;
 let readerSidebar: ReaderSidebarInjector | undefined;

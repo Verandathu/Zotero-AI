@@ -5,6 +5,7 @@
 export type FluentMessageId =
   | 'panel-copy'
   | 'panel-empty-hint'
+  | 'panel-empty-hint-generic'
   | 'panel-input-hint'
   | 'panel-insert-selection'
   | 'panel-no-selection'
@@ -29,5 +30,7 @@ export type FluentMessageId =
   | 'section-chat-sidenav'
   | 'startup-begin'
   | 'startup-finish'
+  | 'toggle-follow'
+  | 'toggle-fulltext'
   | 'tooltip-delete'
   | 'tooltip-new';

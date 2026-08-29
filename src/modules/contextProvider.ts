@@ -184,7 +184,11 @@ export class ContextProvider {
       }
       ztoolkit.log(`Zotero AI: no full text for attachment ${attachment.id}`);
     } catch (e) {
-      ztoolkit.log("Zotero AI: attachmentText failed for attachment", attachment.id, e);
+      ztoolkit.log(
+        "Zotero AI: attachmentText failed for attachment",
+        attachment.id,
+        e,
+      );
     }
     return "";
   }

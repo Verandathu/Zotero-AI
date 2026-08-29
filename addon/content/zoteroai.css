@@ -1,12 +1,54 @@
-/* Zotero AI chat panel styles */
+/* Zotero AI chat panel — Gemini-inspired design
+   Palette (light) from gemini.google.com:
+   primary #0b57d0 / primary-container #d3e3fd
+   surface-container #f0f4f9 / container-high #e9eef6 / on-surface #1f1f1f
+   on-surface-variant #444746 / outline-variant #c4c7c5 / error #b3261e
+   Radii: small 8 / medium 12 / large 16 / xlarge 28 / full 9999px
+   Spacing: xs 4 / s 8 / m 12 / l 16 / xl 20 / xxl 24 / xxxl 28            */
+
 .zoteroai-root {
+  --zai-primary: #0b57d0;
+  --zai-primary-container: #d3e3fd;
+  --zai-on-primary-container: #0842a0;
+  --zai-surface: transparent;
+  --zai-surface-container: #f0f4f9;
+  --zai-surface-container-high: #e9eef6;
+  --zai-on-surface: #1f1f1f;
+  --zai-on-surface-variant: #444746;
+  --zai-outline: #c4c7c5;
+  --zai-error: #b3261e;
+  --zai-r-s: 8px;
+  --zai-r-m: 12px;
+  --zai-r-l: 16px;
+  --zai-r-xl: 28px;
+  --zai-r-full: 9999px;
+
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   font-size: 13px;
-  gap: 4px;
+  line-height: 1.55;
+  color: var(--zai-on-surface);
+  gap: 8px;
+  padding: 8px 10px 10px;
+  background: var(--zai-surface);
 }
+
+@media (prefers-color-scheme: dark) {
+  .zoteroai-root {
+    --zai-primary: #a8c7fa;
+    --zai-primary-container: #1f3a5f;
+    --zai-on-primary-container: #d3e3fd;
+    --zai-surface-container: #282a2c;
+    --zai-surface-container-high: #333537;
+    --zai-on-surface: #e3e3e3;
+    --zai-on-surface-variant: #c4c7c5;
+    --zai-outline: #444746;
+  }
+}
+
+/* ---------- Toolbar ---------- */
 
 .zoteroai-toolbar {
   display: flex;
@@ -15,13 +57,250 @@
   flex-wrap: wrap;
 }
 
+.zoteroai-toolbar button {
+  border: none;
+  background: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--zai-r-full);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--zai-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoteroai-toolbar button:hover {
+  background: var(--zai-surface-container-high);
+  color: var(--zai-on-surface);
+}
+
+.zoteroai-conversation-select {
+  flex: 1;
+  min-width: 0;
+  max-width: 180px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--zai-r-s);
+  background: none;
+  color: var(--zai-on-surface);
+  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zoteroai-conversation-select:hover {
+  background: var(--zai-surface-container-high);
+}
+
 .zoteroai-mini-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   font-size: 11px;
-  opacity: 0.8;
+  color: var(--zai-on-surface-variant);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.zoteroai-mini-toggle input {
+  accent-color: var(--zai-primary);
+  cursor: pointer;
+}
+
+/* Context badge as a rounded chip */
+.zoteroai-context-badge {
+  flex: 1 1 100%;
+  min-width: 0;
+  order: 10;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--zai-on-primary-container);
+  background: var(--zai-primary-container);
+  border-radius: var(--zai-r-full);
+  padding: 2px 10px;
+}
+
+/* ---------- Messages ---------- */
+
+.zoteroai-messages {
+  flex: 1;
+  min-height: 80px;
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 2px;
+  scrollbar-width: thin;
+}
+
+/* User query: right-aligned pill */
+.zoteroai-msg-user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--zai-primary-container);
+  color: var(--zai-on-primary-container);
+  border-radius: var(--zai-r-xl);
+  border-bottom-right-radius: 4px;
+  padding: 8px 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Assistant response: full-width, bubbleless (Gemini style) */
+.zoteroai-msg-assistant {
+  align-self: stretch;
+  max-width: 100%;
+  padding: 2px 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.zoteroai-msg-error {
+  align-self: center;
+  color: var(--zai-error);
+  font-size: 12px;
+  text-align: center;
+  background: none;
+  border-radius: var(--zai-r-m);
+  padding: 4px 10px;
+  background: var(--zai-surface-container);
+  max-width: 95%;
+}
+
+.zoteroai-msg-reasoning {
+  align-self: stretch;
+  opacity: 0.65;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--zai-on-surface-variant);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  border-left: 2px solid var(--zai-outline);
+  padding: 2px 0 2px 10px;
+}
+
+.zoteroai-thinking {
+  opacity: 0.55;
+  font-style: italic;
+  color: var(--zai-on-surface-variant);
+}
+
+/* Markdown body inside assistant messages */
+.zoteroai-msg pre {
+  overflow-x: auto;
+  padding: 8px 10px;
+  border-radius: var(--zai-r-m);
+  background: var(--zai-surface-container);
+  margin: 6px 0;
+}
+
+.zoteroai-msg code {
+  font-family: "Google Sans Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+.zoteroai-msg table {
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+
+.zoteroai-msg td,
+.zoteroai-msg th {
+  border: 1px solid var(--zai-outline);
+  padding: 3px 8px;
+}
+
+.zoteroai-msg h2,
+.zoteroai-msg h3,
+.zoteroai-msg h4 {
+  margin: 8px 0 2px;
+  line-height: 1.3;
+}
+
+.zoteroai-msg ul,
+.zoteroai-msg ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.zoteroai-msg .zoteroai-copy {
+  float: right;
+  font-size: 11px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--zai-on-surface-variant);
+  border-radius: var(--zai-r-s);
+  padding: 1px 6px;
+  opacity: 0.7;
+}
+
+.zoteroai-msg .zoteroai-copy:hover {
+  opacity: 1;
+  background: var(--zai-surface-container-high);
+}
+
+/* ---------- Quick prompt chips ---------- */
+
+.zoteroai-quick-prompts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.zoteroai-quick-prompts button {
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--zai-on-surface);
+  background: var(--zai-surface-container);
+  border: none;
+  border-radius: var(--zai-r-full);
+  padding: 4px 12px;
+}
+
+.zoteroai-quick-prompts button:hover {
+  background: var(--zai-surface-container-high);
+}
+
+/* ---------- Input bar (floating rounded pill) ---------- */
+
+.zoteroai-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  background: var(--zai-surface-container);
+  border-radius: var(--zai-r-xl);
+  padding: 8px 8px 8px 14px;
+}
+
+.zoteroai-input {
+  flex: 1;
+  resize: none;
+  min-height: 24px;
+  max-height: 140px;
+  border: none;
+  background: none;
+  color: var(--zai-on-surface);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+.zoteroai-input::placeholder {
+  color: var(--zai-on-surface-variant);
+  opacity: 0.8;
 }
 
 .zoteroai-btn-col {
@@ -31,136 +310,57 @@
 }
 
 .zoteroai-btn-col button {
-  min-width: 44px;
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--zai-r-full);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.zoteroai-context-badge {
-  flex: 1;
-  min-width: 0;
+.zoteroai-btn-send {
+  background: var(--zai-primary);
+  color: #fff;
+}
+
+.zoteroai-btn-stop {
+  background: var(--zai-surface-container-high);
+  color: var(--zai-on-surface);
+}
+
+/* ---------- Zero state (Gemini-style greeting) ---------- */
+
+.zoteroai-empty-state {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 12px;
+  color: var(--zai-on-surface-variant);
+}
+
+.zoteroai-empty-icon {
+  font-size: 22px;
+  color: var(--zai-primary);
+}
+
+.zoteroai-empty-greeting {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--zai-on-surface);
+}
+
+.zoteroai-empty-title {
+  font-size: 12px;
+  max-width: 90%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: 0.75;
-  font-size: 12px;
-}
-
-.zoteroai-conversation-select {
-  max-width: 140px;
-}
-
-.zoteroai-messages {
-  flex: 1;
-  min-height: 80px;
-  max-height: 460px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  border-radius: 5px;
-}
-
-.zoteroai-msg {
-  max-width: 92%;
-  padding: 6px 9px;
-  border-radius: 8px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.zoteroai-msg-user {
-  align-self: flex-end;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-}
-
-.zoteroai-msg-assistant {
-  align-self: flex-start;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-}
-
-.zoteroai-msg-error {
-  align-self: center;
-  color: #c0392b;
-  font-size: 12px;
-  text-align: center;
-  background: none;
-  border: none;
-}
-
-.zoteroai-msg-reasoning {
-  align-self: flex-start;
-  opacity: 0.55;
-  font-style: italic;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 180px;
-  overflow-y: auto;
-  border: 1px dashed color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 8px;
-}
-
-.zoteroai-msg pre {
-  overflow-x: auto;
-  padding: 4px;
-  border-radius: 4px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
-
-.zoteroai-msg code {
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.zoteroai-msg table {
-  border-collapse: collapse;
-}
-
-.zoteroai-msg td,
-.zoteroai-msg th {
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  padding: 2px 5px;
-}
-
-.zoteroai-msg .zoteroai-copy {
-  float: right;
-  font-size: 11px;
-  cursor: pointer;
-  border: none;
-  background: none;
-  opacity: 0.6;
-}
-
-.zoteroai-msg .zoteroai-copy:hover {
-  opacity: 1;
-}
-
-.zoteroai-quick-prompts {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.zoteroai-quick-prompts button {
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.zoteroai-input-row {
-  display: flex;
-  gap: 4px;
-  align-items: flex-end;
-}
-
-.zoteroai-input {
-  flex: 1;
-  resize: none;
-  min-height: 44px;
-  max-height: 160px;
-}
-
-.zoteroai-thinking {
-  opacity: 0.5;
-  font-style: italic;
+  opacity: 0.8;
 }

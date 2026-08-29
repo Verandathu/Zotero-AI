@@ -71,7 +71,11 @@ export class ChatPanel {
   /**
    * Mount (or update) the chat inside a library item pane section body.
    */
-  private async mountSection(body: HTMLElement, item?: Zotero.Item, _tabType?: string) {
+  private async mountSection(
+    body: HTMLElement,
+    item?: Zotero.Item,
+    _tabType?: string,
+  ) {
     await this.chatManager.load();
     const ctx = this.ensurePanel(body, body.ownerDocument!);
     if (item) {
@@ -91,7 +95,10 @@ export class ChatPanel {
     const item = this.contextProvider.getCurrentItem();
     if (item) {
       this.updateItemBadge(ctx, item);
-      if ((root.querySelector(".zoteroai-ctx-follow") as HTMLInputElement)?.checked) {
+      if (
+        (root.querySelector(".zoteroai-ctx-follow") as HTMLInputElement)
+          ?.checked
+      ) {
         ctx.filterKey = item.key;
       }
     }
@@ -113,7 +120,12 @@ export class ChatPanel {
     return ctx;
   }
 
-  private el(doc: Document, tag: string, cls?: string, text?: string): HTMLElement {
+  private el(
+    doc: Document,
+    tag: string,
+    cls?: string,
+    text?: string,
+  ): HTMLElement {
     const e = doc.createElementNS(XHTML_NS, tag) as HTMLElement;
     if (cls) {
       e.className = cls;
@@ -129,20 +141,23 @@ export class ChatPanel {
     const { body, doc } = ctx;
     const toolbar = this.el(doc, "div", "zoteroai-toolbar");
 
-    const select = this.el(doc, "select", "zoteroai-conversation-select") as HTMLSelectElement;
+    const select = this.el(
+      doc,
+      "select",
+      "zoteroai-conversation-select",
+    ) as HTMLSelectElement;
     select.title = "Conversation";
     toolbar.appendChild(select);
 
     const btnNew = this.el(doc, "button", "zoteroai-btn-new", "+");
     btnNew.title = getString("tooltip-new");
+    btnNew.textContent = "＋";
     toolbar.appendChild(btnNew);
 
-    const btnDel = this.el(doc, "button", "zoteroai-btn-delete", "-");
+    const btnDel = this.el(doc, "button", "zoteroai-btn-delete");
     btnDel.title = getString("tooltip-delete");
+    btnDel.textContent = "🗑";
     toolbar.appendChild(btnDel);
-
-    const badge = this.el(doc, "div", "zoteroai-context-badge");
-    toolbar.appendChild(badge);
 
     const followLabel = this.el(doc, "label", "zoteroai-mini-toggle");
     const follow = this.el(doc, "input") as HTMLInputElement;
@@ -150,7 +165,9 @@ export class ChatPanel {
     follow.checked = true;
     follow.classList.add("zoteroai-ctx-follow");
     followLabel.appendChild(follow);
-    followLabel.appendChild(this.el(doc, "span", undefined, "ctx"));
+    followLabel.appendChild(
+      this.el(doc, "span", undefined, getString("toggle-follow")),
+    );
     toolbar.appendChild(followLabel);
 
     const fullTextLabel = this.el(doc, "label", "zoteroai-mini-toggle");
@@ -159,41 +176,66 @@ export class ChatPanel {
     fullText.checked = !!getPref("includeFullText");
     fullText.classList.add("zoteroai-ctx-fulltext");
     fullTextLabel.appendChild(fullText);
-    fullTextLabel.appendChild(this.el(doc, "span", undefined, "full"));
+    fullTextLabel.appendChild(
+      this.el(doc, "span", undefined, getString("toggle-fulltext")),
+    );
     toolbar.appendChild(fullTextLabel);
+
+    const badge = this.el(doc, "div", "zoteroai-context-badge");
+    toolbar.appendChild(badge);
 
     body.appendChild(toolbar);
     body.appendChild(this.el(doc, "div", "zoteroai-messages"));
     body.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
 
+    // Floating rounded input bar with a circular send button (Gemini style)
     const inputRow = this.el(doc, "div", "zoteroai-input-row");
-    const input = this.el(doc, "textarea", "zoteroai-input") as HTMLTextAreaElement;
-    input.rows = 2;
+    const input = this.el(
+      doc,
+      "textarea",
+      "zoteroai-input",
+    ) as HTMLTextAreaElement;
+    input.rows = 1;
     input.placeholder = getString("panel-input-hint");
     inputRow.appendChild(input);
     const btnCol = this.el(doc, "div", "zoteroai-btn-col");
-    btnCol.appendChild(this.el(doc, "button", "zoteroai-btn-send", getString("panel-send")));
-    const btnStop = this.el(doc, "button", "zoteroai-btn-stop", getString("panel-stop"));
+    const btnSend = this.el(doc, "button", "zoteroai-btn-send");
+    btnSend.title = getString("panel-send");
+    btnSend.textContent = "➤";
+    btnCol.appendChild(btnSend);
+    const btnStop = this.el(doc, "button", "zoteroai-btn-stop", "■");
+    btnStop.title = getString("panel-stop");
     btnStop.hidden = true;
     btnCol.appendChild(btnStop);
     inputRow.appendChild(btnCol);
     body.appendChild(inputRow);
+
+    // Auto-grow the textarea while typing
+    input.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+    });
   }
 
   private bindEvents(ctx: PanelContext) {
     const { body } = ctx;
     const $ = (sel: string) => body.querySelector(sel);
 
-    ($(".zoteroai-conversation-select") as HTMLSelectElement)?.addEventListener("change", (e: any) => {
-      this.chatManager.setActive(e.target.value);
-      ctx.convID = e.target.value;
-      this.renderMessages(ctx);
-    });
+    ($(".zoteroai-conversation-select") as HTMLSelectElement)?.addEventListener(
+      "change",
+      (e: any) => {
+        this.chatManager.setActive(e.target.value);
+        ctx.convID = e.target.value;
+        this.renderMessages(ctx);
+      },
+    );
 
     $(".zoteroai-btn-new")?.addEventListener("click", () => {
       const item = this.contextProvider.getCurrentItem();
       const conv = this.chatManager.createConversation(
-        item ? { key: item.key, title: this.contextProvider.getItemTitle(item) } : undefined,
+        item
+          ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
+          : undefined,
       );
       ctx.convID = conv.id;
       this.renderToolbar(ctx, item);
@@ -209,12 +251,20 @@ export class ChatPanel {
       }
     });
 
-    $(".zoteroai-btn-send")?.addEventListener("click", () => void this.send(ctx));
-    $(".zoteroai-btn-stop")?.addEventListener("click", () => this.apiClient.stop());
+    $(".zoteroai-btn-send")?.addEventListener(
+      "click",
+      () => void this.send(ctx),
+    );
+    $(".zoteroai-btn-stop")?.addEventListener("click", () =>
+      this.apiClient.stop(),
+    );
 
-    ($(".zoteroai-ctx-fulltext") as HTMLInputElement)?.addEventListener("click", (e: any) => {
-      setPref("includeFullText", e.target.checked);
-    });
+    ($(".zoteroai-ctx-fulltext") as HTMLInputElement)?.addEventListener(
+      "click",
+      (e: any) => {
+        setPref("includeFullText", e.target.checked);
+      },
+    );
 
     const input = $(".zoteroai-input") as HTMLTextAreaElement;
     input?.addEventListener("keydown", (e: any) => {
@@ -226,7 +276,9 @@ export class ChatPanel {
   }
 
   private updateItemBadge(ctx: PanelContext, item: Zotero.Item) {
-    const badge = ctx.body.querySelector(".zoteroai-context-badge") as HTMLElement;
+    const badge = ctx.body.querySelector(
+      ".zoteroai-context-badge",
+    ) as HTMLElement;
     if (badge) {
       badge.textContent = this.contextProvider.getItemTitle(item);
       badge.title = this.contextProvider.getItemTitle(item);
@@ -236,11 +288,15 @@ export class ChatPanel {
   /** Fill the conversation dropdown for the current filter view. */
   private renderToolbar(ctx: PanelContext, item?: Zotero.Item) {
     const { body, doc } = ctx;
-    const select = body.querySelector(".zoteroai-conversation-select") as HTMLSelectElement;
+    const select = body.querySelector(
+      ".zoteroai-conversation-select",
+    ) as HTMLSelectElement;
     if (!select) {
       return;
     }
-    const fullTextCheckbox = body.querySelector(".zoteroai-ctx-fulltext") as HTMLInputElement;
+    const fullTextCheckbox = body.querySelector(
+      ".zoteroai-ctx-fulltext",
+    ) as HTMLInputElement;
     if (fullTextCheckbox) {
       fullTextCheckbox.checked = !!getPref("includeFullText");
     }
@@ -248,12 +304,22 @@ export class ChatPanel {
     const conversations = this.chatManager.listFor(ctx.filterKey);
     select.innerHTML = "";
     for (const conv of conversations) {
-      const option = this.el(doc, "option", undefined, conv.title) as HTMLOptionElement;
+      const option = this.el(
+        doc,
+        "option",
+        undefined,
+        conv.title,
+      ) as HTMLOptionElement;
       option.value = conv.id;
       select.appendChild(option);
     }
     if (!conversations.length) {
-      const option = this.el(doc, "option", undefined, "—") as HTMLOptionElement;
+      const option = this.el(
+        doc,
+        "option",
+        undefined,
+        "—",
+      ) as HTMLOptionElement;
       option.value = "";
       select.appendChild(option);
     }
@@ -276,19 +342,30 @@ export class ChatPanel {
         if (qp.forSelection) {
           void this.sendSelectionPrompt(ctx, qp.prompt);
         } else {
-          const input = ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement;
+          const input = ctx.body.querySelector(
+            ".zoteroai-input",
+          ) as HTMLTextAreaElement;
           input.value = qp.prompt;
           void this.send(ctx);
         }
       });
       container.appendChild(btn);
     }
-    const insertBtn = this.el(ctx.doc, "button", "zoteroai-quick-btn", getString("panel-insert-selection"));
+    const insertBtn = this.el(
+      ctx.doc,
+      "button",
+      "zoteroai-quick-btn",
+      getString("panel-insert-selection"),
+    );
     insertBtn.addEventListener("click", () => {
-      const input = ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement;
+      const input = ctx.body.querySelector(
+        ".zoteroai-input",
+      ) as HTMLTextAreaElement;
       const selection = this.getSelection();
       if (selection && input) {
-        input.value = input.value ? `${input.value}\n\n${selection}` : selection;
+        input.value = input.value
+          ? `${input.value}\n\n${selection}`
+          : selection;
       }
     });
     container.appendChild(insertBtn);
@@ -302,12 +379,31 @@ export class ChatPanel {
     container.innerHTML = "";
     const conv = this.chatManager.active;
     if (!conv || !conv.messages.length) {
-      const hint = this.el(ctx.doc, "div", "zoteroai-thinking", getString("panel-empty-hint"));
-      container.appendChild(hint);
+      // Gemini-style zero state: large centered greeting
+      const item = this.contextProvider.getCurrentItem();
+      const title = item ? this.contextProvider.getItemTitle(item) : "";
+      const wrap = this.el(ctx.doc, "div", "zoteroai-empty-state");
+      const icon = this.el(ctx.doc, "div", "zoteroai-empty-icon", "✦");
+      const greeting = this.el(
+        ctx.doc,
+        "div",
+        "zoteroai-empty-greeting",
+        getString("panel-empty-hint"),
+      );
+      wrap.appendChild(icon);
+      wrap.appendChild(greeting);
+      if (title) {
+        wrap.appendChild(
+          this.el(ctx.doc, "div", "zoteroai-empty-title", title),
+        );
+      }
+      container.appendChild(wrap);
       return;
     }
     for (const msg of conv.messages) {
-      container.appendChild(this.createMessageElement(ctx, msg.role, msg.content));
+      container.appendChild(
+        this.createMessageElement(ctx, msg.role, msg.content),
+      );
     }
     container.scrollTop = container.scrollHeight;
   }
@@ -323,7 +419,12 @@ export class ChatPanel {
       return el;
     }
     // Assistant messages: render markdown with a copy button
-    const copyBtn = this.el(ctx.doc, "button", "zoteroai-copy", getString("panel-copy"));
+    const copyBtn = this.el(
+      ctx.doc,
+      "button",
+      "zoteroai-copy",
+      getString("panel-copy"),
+    );
     copyBtn.addEventListener("click", () => {
       const win = ctx.doc.defaultView as any;
       if (win?.Zotero?.Utilities?.Internal?.copyTextToClipboard) {
@@ -350,7 +451,10 @@ export class ChatPanel {
       .replace(/>/g, "&gt;");
     const html = escaped
       // fenced code blocks
-      .replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => `<pre><code>${code}</code></pre>`)
+      .replace(
+        /```(\w*)\n([\s\S]*?)```/g,
+        (_m, lang, code) => `<pre><code>${code}</code></pre>`,
+      )
       // inline code
       .replace(/`([^`\n]+)`/g, "<code>$1</code>")
       // headings
@@ -384,11 +488,14 @@ export class ChatPanel {
   private getSelection(): string | null {
     try {
       const win = Zotero.getMainWindow();
-      const reader = Zotero.Reader.getByTabID((win as any).Zotero_Tabs.selectedID);
+      const reader = Zotero.Reader.getByTabID(
+        (win as any).Zotero_Tabs.selectedID,
+      );
       if (!reader) {
         return null;
       }
-      const iframeWin = (reader as any)._internalReader?._primaryView?._iframeWindow;
+      const iframeWin = (reader as any)._internalReader?._primaryView
+        ?._iframeWindow;
       const selection = iframeWin?.getSelection?.()?.toString();
       return selection?.trim() || null;
     } catch (e) {
@@ -417,7 +524,9 @@ export class ChatPanel {
       const parts = [
         `The user is currently viewing this paper:\nTitle: ${ctx.title}`,
         ctx.meta,
-        ctx.fullText ? `Full text (may be truncated):\n"""\n${ctx.fullText}\n"""` : "",
+        ctx.fullText
+          ? `Full text (may be truncated):\n"""\n${ctx.fullText}\n"""`
+          : "",
       ].filter(Boolean);
       prompt += `\n\n${parts.join("\n\n")}`;
       if (ctx.truncated) {
@@ -432,7 +541,9 @@ export class ChatPanel {
     if (this.apiClient.generating) {
       return;
     }
-    const input = ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement;
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
     const content = input?.value.trim();
     if (!content) {
       return;
@@ -442,7 +553,9 @@ export class ChatPanel {
     if (!conv) {
       const item = this.contextProvider.getCurrentItem();
       conv = this.chatManager.createConversation(
-        item ? { key: item.key, title: this.contextProvider.getItemTitle(item) } : undefined,
+        item
+          ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
+          : undefined,
       );
       ctx.convID = conv.id;
     }
@@ -469,7 +582,12 @@ export class ChatPanel {
     if (container) {
       container.querySelector(".zoteroai-thinking")?.remove();
       container.appendChild(this.createMessageElement(ctx, "user", content));
-      const pending = this.el(ctx.doc, "div", "zoteroai-msg zoteroai-msg-assistant zoteroai-thinking", "…");
+      const pending = this.el(
+        ctx.doc,
+        "div",
+        "zoteroai-msg zoteroai-msg-assistant zoteroai-thinking",
+        "…",
+      );
       container.appendChild(pending);
       container.scrollTop = container.scrollHeight;
     }
@@ -497,7 +615,9 @@ export class ChatPanel {
         } else if (el && now - lastRender >= 100) {
           // Throttle markdown re-rendering during streaming
           lastRender = now;
-          const rendered = el.querySelector('[data-role="zoteroai-markdown"]') as HTMLElement;
+          const rendered = el.querySelector(
+            '[data-role="zoteroai-markdown"]',
+          ) as HTMLElement;
           if (rendered) {
             this.renderMarkdown(ctx, rendered, streamed);
           }
@@ -513,7 +633,11 @@ export class ChatPanel {
         }
         if (!reasoningEl) {
           container.querySelector(".zoteroai-thinking")?.remove();
-          reasoningEl = this.el(ctx.doc, "div", "zoteroai-msg zoteroai-msg-reasoning");
+          reasoningEl = this.el(
+            ctx.doc,
+            "div",
+            "zoteroai-msg zoteroai-msg-reasoning",
+          );
           container.appendChild(reasoningEl);
         }
         // Reasoning deltas arrive fast; textContent update is cheap
@@ -525,7 +649,9 @@ export class ChatPanel {
         this.setGeneratingUI(ctx, false);
         // Final full render
         if (el && container) {
-          const rendered = el.querySelector('[data-role="zoteroai-markdown"]') as HTMLElement;
+          const rendered = el.querySelector(
+            '[data-role="zoteroai-markdown"]',
+          ) as HTMLElement;
           if (rendered) {
             this.renderMarkdown(ctx, rendered, streamed);
           }
@@ -537,7 +663,9 @@ export class ChatPanel {
         this.setGeneratingUI(ctx, false);
         container?.querySelector(".zoteroai-thinking")?.remove();
         if (container) {
-          container.appendChild(this.createMessageElement(ctx, "error", message));
+          container.appendChild(
+            this.createMessageElement(ctx, "error", message),
+          );
           container.scrollTop = container.scrollHeight;
         }
       },
@@ -546,11 +674,19 @@ export class ChatPanel {
 
   private async sendSelectionPrompt(ctx: PanelContext, promptTemplate: string) {
     const selection = this.getSelection();
-    const input = ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement;
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
     if (!selection) {
       const container = ctx.body.querySelector(".zoteroai-messages");
       if (container) {
-        container.appendChild(this.createMessageElement(ctx, "error", getString("panel-no-selection")));
+        container.appendChild(
+          this.createMessageElement(
+            ctx,
+            "error",
+            getString("panel-no-selection"),
+          ),
+        );
       }
       return;
     }

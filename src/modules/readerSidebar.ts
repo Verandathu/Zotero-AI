@@ -87,14 +87,18 @@ export class ReaderSidebarInjector {
 
   private tryMount(reader: any, win: any) {
     const doc: Document = win.document;
-    const toolbar = doc.querySelector("#sidebarContainer .sidebar-toolbar .start");
+    const toolbar = doc.querySelector(
+      "#sidebarContainer .sidebar-toolbar .start",
+    );
     const content = doc.getElementById("sidebarContent");
     if (!toolbar || !content) {
       return;
     }
 
     // --- Switcher button ---
-    let btn = doc.getElementById(BTN_ID) as (HTMLButtonElement & { _zoteroaiHooked?: boolean }) | null;
+    let btn = doc.getElementById(BTN_ID) as
+      | (HTMLButtonElement & { _zoteroaiHooked?: boolean })
+      | null;
     if (btn && !toolbar.contains(btn)) {
       // React removed it during re-render; re-append
       btn.remove();
@@ -148,7 +152,11 @@ export class ReaderSidebarInjector {
     }
   }
 
-  private activate(doc: Document, btn: HTMLButtonElement, content: HTMLElement) {
+  private activate(
+    doc: Document,
+    btn: HTMLButtonElement,
+    content: HTMLElement,
+  ) {
     const panel = doc.getElementById(PANEL_ID);
     if (!panel) {
       return;

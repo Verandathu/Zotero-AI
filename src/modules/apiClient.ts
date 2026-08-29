@@ -27,7 +27,9 @@ export class ApiClient {
    * fetch, TextDecoder) — resolve them from the main window.
    */
   private win(): any {
-    return Zotero.getMainWindow() || (Zotero as any).getActiveZoteroPane?.()?.window;
+    return (
+      Zotero.getMainWindow() || (Zotero as any).getActiveZoteroPane?.()?.window
+    );
   }
 
   get generating() {
@@ -76,7 +78,8 @@ export class ApiClient {
     this.softStopped = false;
     const win = this.win();
     const Ctor = win?.AbortController;
-    const doFetch = win?.fetch?.bind(win) || (globalThis as any).fetch?.bind(globalThis);
+    const doFetch =
+      win?.fetch?.bind(win) || (globalThis as any).fetch?.bind(globalThis);
     if (!doFetch) {
       callbacks.onError("fetch is not available in this environment.");
       return "";
@@ -93,7 +96,9 @@ export class ApiClient {
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         },
         body: JSON.stringify(body),
-        ...(this.abortController ? { signal: this.abortController.signal } : {}),
+        ...(this.abortController
+          ? { signal: this.abortController.signal }
+          : {}),
       });
 
       if (!response.ok) {
@@ -194,7 +199,10 @@ export class ApiClient {
             // Reasoning models (GLM, DeepSeek-R1, QwQ...) stream their chain
             // of thought in `reasoning_content`; show it in the bubble but
             // don't store it as the answer
-            if (typeof delta?.reasoning_content === "string" && delta.reasoning_content) {
+            if (
+              typeof delta?.reasoning_content === "string" &&
+              delta.reasoning_content
+            ) {
               onReasoning(delta.reasoning_content);
             }
             // Surface upstream errors delivered as SSE payloads
