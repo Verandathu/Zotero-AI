@@ -188,7 +188,8 @@ export class ChatPanel {
     body.appendChild(this.el(doc, "div", "zoteroai-messages"));
     body.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
 
-    // Floating rounded input bar with a circular send button (Gemini style)
+    // Floating rounded input bar with a single send/stop toggle button
+    // (Gemini / DeepSeek style: one button morphs between the two states)
     const inputRow = this.el(doc, "div", "zoteroai-input-row");
     const input = this.el(
       doc,
@@ -198,22 +199,21 @@ export class ChatPanel {
     input.rows = 1;
     input.placeholder = getString("panel-input-hint");
     inputRow.appendChild(input);
-    const btnCol = this.el(doc, "div", "zoteroai-btn-col");
-    const btnSend = this.el(doc, "button", "zoteroai-btn-send");
-    btnSend.title = getString("panel-send");
-    btnSend.textContent = "➤";
-    btnCol.appendChild(btnSend);
-    const btnStop = this.el(doc, "button", "zoteroai-btn-stop", "■");
-    btnStop.title = getString("panel-stop");
-    btnStop.hidden = true;
-    btnCol.appendChild(btnStop);
-    inputRow.appendChild(btnCol);
+    const btnAction = this.el(
+      doc,
+      "button",
+      "zoteroai-btn-action zoteroai-mode-send zoteroai-empty",
+    );
+    btnAction.title = getString("panel-send");
+    btnAction.textContent = "➤";
+    inputRow.appendChild(btnAction);
     body.appendChild(inputRow);
 
-    // Auto-grow the textarea while typing
+    // Auto-grow the textarea while typing; dim the send button while empty
     input.addEventListener("input", () => {
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+      btnAction.classList.toggle("zoteroai-empty", !input.value.trim());
     });
   }
 
@@ -251,13 +251,14 @@ export class ChatPanel {
       }
     });
 
-    $(".zoteroai-btn-send")?.addEventListener(
-      "click",
-      () => void this.send(ctx),
-    );
-    $(".zoteroai-btn-stop")?.addEventListener("click", () =>
-      this.apiClient.stop(),
-    );
+    // Single action button: send when idle, stop while generating
+    $(".zoteroai-btn-action")?.addEventListener("click", () => {
+      if (this.apiClient.generating) {
+        this.apiClient.stop();
+      } else {
+        void this.send(ctx);
+      }
+    });
 
     ($(".zoteroai-ctx-fulltext") as HTMLInputElement)?.addEventListener(
       "click",
@@ -507,14 +508,25 @@ export class ChatPanel {
     }
   }
 
+  /** Morph the single action button between send and stop states. */
   private setGeneratingUI(ctx: PanelContext, generating: boolean) {
-    const send = ctx.body.querySelector(".zoteroai-btn-send") as HTMLElement;
-    const stop = ctx.body.querySelector(".zoteroai-btn-stop") as HTMLElement;
-    if (send) {
-      send.hidden = generating;
+    const btn = ctx.body.querySelector(
+      ".zoteroai-btn-action",
+    ) as HTMLElement | null;
+    if (!btn) {
+      return;
     }
-    if (stop) {
-      stop.hidden = !generating;
+    btn.classList.toggle("zoteroai-mode-send", !generating);
+    btn.classList.toggle("zoteroai-mode-stop", generating);
+    btn.textContent = generating ? "■" : "➤";
+    btn.title = getString(generating ? "panel-stop" : "panel-send");
+    if (generating) {
+      btn.classList.remove("zoteroai-empty");
+    } else {
+      const input = ctx.body.querySelector(
+        ".zoteroai-input",
+      ) as HTMLTextAreaElement;
+      btn.classList.toggle("zoteroai-empty", !input?.value.trim());
     }
   }
 

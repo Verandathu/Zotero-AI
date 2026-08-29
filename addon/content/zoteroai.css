@@ -437,12 +437,12 @@
 
 .zoteroai-input-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: flex-end;
   flex-shrink: 0;
   background: var(--zai-surface-container);
   border-radius: var(--zai-r-xl);
-  padding: 8px 8px 8px 14px;
+  padding: 9px 9px 9px 14px;
   border: 1px solid transparent;
   transition: border-color 0.15s var(--zai-ease),
     background-color 0.15s var(--zai-ease), box-shadow 0.15s var(--zai-ease);
@@ -457,7 +457,7 @@
 .zoteroai-input {
   flex: 1;
   resize: none;
-  min-height: 24px;
+  min-height: 30px;
   max-height: 140px;
   border: none;
   background: none;
@@ -465,7 +465,8 @@
   font-size: 13px;
   line-height: 1.5;
   outline: none;
-  padding: 0;
+  padding: 3px 0;
+  box-sizing: border-box;
   font-family: inherit;
   overflow-y: auto;
   transition: height 0.12s var(--zai-ease);
@@ -476,41 +477,43 @@
   opacity: 0.8;
 }
 
-.zoteroai-btn-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.zoteroai-btn-col button {
-  min-width: 30px;
+/* Single morphing action button: send (accent) ↔ stop (neutral + pulse).
+   The background/color transition cross-fades between the two states. */
+.zoteroai-btn-action {
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   border: none;
   border-radius: var(--zai-r-full);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease), opacity 0.15s var(--zai-ease);
+  transition: background-color 0.25s var(--zai-ease),
+    color 0.25s var(--zai-ease), transform 0.1s var(--zai-ease),
+    opacity 0.2s var(--zai-ease);
 }
 
-.zoteroai-btn-col button:active {
-  transform: scale(0.9);
+.zoteroai-btn-action:active {
+  transform: scale(0.88);
 }
 
-.zoteroai-btn-send {
+.zoteroai-btn-action.zoteroai-mode-send {
   background: var(--zai-primary);
   color: #fff;
 }
 
-.zoteroai-btn-send:hover {
-  opacity: 0.9;
+.zoteroai-btn-action.zoteroai-mode-send:hover {
+  opacity: 0.88;
 }
 
-.zoteroai-btn-stop {
+.zoteroai-btn-action.zoteroai-mode-send.zoteroai-empty {
+  opacity: 0.45;
+}
+
+.zoteroai-btn-action.zoteroai-mode-stop {
   background: var(--zai-surface-container-high);
   color: var(--zai-on-surface);
   animation: zoteroai-stop-pulse 1.6s ease-in-out infinite;
