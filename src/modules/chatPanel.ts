@@ -482,6 +482,9 @@ export class ChatPanel {
       .replace(/^(?!<[huplo])(.+)$/gm, "<p>$1</p>");
     const frag = ctx.doc.createRange().createContextualFragment(html);
     el.appendChild(frag);
+    // Wrap up: any leftover stray text nodes outside block elements (e.g.
+    // between the copy button wrapper and parsed blocks) get normalized
+    el.normalize();
   }
 
   /** Selected text in the active reader, if any. */
@@ -664,8 +667,13 @@ export class ChatPanel {
         }
       },
       onDone: () => {
-        this.chatManager.updateLastAssistant(convID, streamed);
         this.setGeneratingUI(ctx, false);
+        // Hide the chain-of-thought once the answer is complete
+        reasoningEl?.remove();
+        reasoningEl = null;
+        // Persist the assistant reply (created/updated in the store here —
+        // during streaming the UI shows it but the store isn't touched)
+        this.chatManager.setLastAssistant(convID, streamed);
         // Final full render
         if (el && container) {
           const rendered = el.querySelector(
@@ -683,6 +691,13 @@ export class ChatPanel {
       onError: (message) => {
         this.setGeneratingUI(ctx, false);
         container?.querySelector(".zoteroai-thinking")?.remove();
+        reasoningEl?.remove();
+        reasoningEl = null;
+        // Keep partial output if the model already produced something;
+        // otherwise drop the pending placeholder from the store view
+        if (streamed) {
+          this.chatManager.setLastAssistant(convID, streamed);
+        }
         if (container) {
           container.appendChild(
             this.createMessageElement(ctx, "error", message),

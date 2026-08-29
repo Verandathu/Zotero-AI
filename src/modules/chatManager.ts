@@ -116,15 +116,22 @@ export class ChatManager {
     this.scheduleSave();
   }
 
-  /** Update the trailing assistant message in place while streaming. */
-  updateLastAssistant(convID: string, text: string) {
+  /** Ensure a trailing assistant message exists and set its content. */
+  setLastAssistant(convID: string, text: string) {
     const conv = this.conversations.find((c) => c.id === convID);
     if (!conv) {
       return;
     }
     const last = conv.messages[conv.messages.length - 1];
     if (last?.role === "assistant") {
-      last.content = text;
+      if (last.content !== text) {
+        last.content = text;
+        conv.updatedAt = Date.now();
+        this.scheduleSave();
+      }
+    } else if (text) {
+      // First chunk of a new assistant reply
+      conv.messages.push({ role: "assistant", content: text });
       conv.updatedAt = Date.now();
       this.scheduleSave();
     }

@@ -181,7 +181,8 @@
   overflow-wrap: anywhere;
   box-sizing: border-box;
   display: block;
-  overflow: hidden;
+  overflow: visible;
+  line-height: 1.5;
 }
 
 /* Assistant response: full-width, bubbleless (Gemini style) */
@@ -193,6 +194,31 @@
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
+  overflow: visible;
+}
+
+/* Rendered markdown blocks manage their own spacing; kill the inherited
+   pre-wrap inside them so parsed tags and text nodes don't leak outside */
+.zoteroai-msg-assistant p,
+.zoteroai-msg-assistant ul,
+.zoteroai-msg-assistant ol,
+.zoteroai-msg-assistant h2,
+.zoteroai-msg-assistant h3,
+.zoteroai-msg-assistant h4 {
+  white-space: normal;
+  margin: 4px 0;
+}
+
+.zoteroai-msg-assistant pre {
+  white-space: pre;
+}
+
+/* Copy button sits above the markdown, not floated over the text */
+.zoteroai-msg .zoteroai-copy {
+  float: right;
+  position: relative;
+  z-index: 1;
+  margin-left: 6px;
 }
 
 .zoteroai-msg-error {
@@ -267,7 +293,6 @@
 }
 
 .zoteroai-msg .zoteroai-copy {
-  float: right;
   font-size: 11px;
   cursor: pointer;
   border: none;
