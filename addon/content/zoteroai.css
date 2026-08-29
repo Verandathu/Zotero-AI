@@ -1,4 +1,4 @@
-/* Zotero AI chat panel — Gemini-inspired design
+/* Zotero AI chat panel — Gemini-inspired design, polished
    Palette (light) from gemini.google.com:
    primary #0b57d0 / primary-container #d3e3fd
    surface-container #f0f4f9 / container-high #e9eef6 / on-surface #1f1f1f
@@ -22,6 +22,7 @@
   --zai-r-l: 16px;
   --zai-r-xl: 28px;
   --zai-r-full: 9999px;
+  --zai-ease: cubic-bezier(0.2, 0, 0, 1);
 
   display: flex;
   flex-direction: column;
@@ -94,11 +95,17 @@
   justify-content: center;
   -moz-user-select: none;
   user-select: none;
+  transition: background-color 0.15s var(--zai-ease),
+    color 0.15s var(--zai-ease), transform 0.1s var(--zai-ease);
 }
 
 .zoteroai-toolbar button:hover {
   background: var(--zai-surface-container-high);
   color: var(--zai-on-surface);
+}
+
+.zoteroai-toolbar button:active {
+  transform: scale(0.92);
 }
 
 .zoteroai-conversation-select {
@@ -115,6 +122,7 @@
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background-color 0.15s var(--zai-ease);
 }
 
 .zoteroai-conversation-select:hover {
@@ -129,6 +137,11 @@
   color: var(--zai-on-surface-variant);
   white-space: nowrap;
   cursor: pointer;
+  transition: color 0.15s var(--zai-ease);
+}
+
+.zoteroai-mini-toggle:hover {
+  color: var(--zai-on-surface);
 }
 
 .zoteroai-mini-toggle input {
@@ -163,6 +176,23 @@
   gap: 16px;
   padding: 8px 4px;
   scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+
+/* New messages ease in (DeepSeek/Claude-style entrance) */
+@keyframes zoteroai-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.zoteroai-messages > * {
+  animation: zoteroai-fade-up 0.22s var(--zai-ease) both;
 }
 
 /* User query: right-aligned pill */
@@ -197,6 +227,27 @@
   overflow: visible;
 }
 
+/* Streaming caret on the in-flight assistant message */
+.zoteroai-streaming::after {
+  content: "▍";
+  display: inline-block;
+  color: var(--zai-primary);
+  animation: zoteroai-caret 0.9s steps(2) infinite;
+  font-size: 0.9em;
+  margin-left: 1px;
+}
+
+@keyframes zoteroai-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Rendered markdown blocks manage their own spacing; kill the inherited
    pre-wrap inside them so parsed tags and text nodes don't leak outside */
 .zoteroai-msg-assistant p,
@@ -213,45 +264,88 @@
   white-space: pre;
 }
 
-/* Copy button sits above the markdown, not floated over the text */
-.zoteroai-msg .zoteroai-copy {
-  float: right;
-  position: relative;
-  z-index: 1;
-  margin-left: 6px;
-}
-
 .zoteroai-msg-error {
   align-self: center;
   color: var(--zai-error);
   font-size: 12px;
   text-align: center;
-  background: none;
   border-radius: var(--zai-r-m);
   padding: 4px 10px;
   background: var(--zai-surface-container);
   max-width: 95%;
 }
 
+/* ---------- Reasoning (chain of thought) ----------
+   Visible only while streaming; collapses smoothly the moment content
+   arrives (max-height + opacity transition, then removed from the DOM). */
+
 .zoteroai-msg-reasoning {
   align-self: stretch;
-  opacity: 0.65;
   font-style: italic;
   font-size: 12px;
   color: var(--zai-on-surface-variant);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
+  overflow: hidden;
   max-height: 160px;
   overflow-y: auto;
   border-left: 2px solid var(--zai-outline);
   padding: 2px 0 2px 10px;
+  transition: max-height 0.3s var(--zai-ease), opacity 0.3s var(--zai-ease),
+    padding 0.3s var(--zai-ease), margin 0.3s var(--zai-ease);
+}
+
+.zoteroai-msg-reasoning.zoteroai-collapsing {
+  max-height: 0 !important;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-color: transparent;
 }
 
 .zoteroai-thinking {
   opacity: 0.55;
   font-style: italic;
   color: var(--zai-on-surface-variant);
+}
+
+/* Thinking dots (Claude/ChatGPT-style) instead of a bare "…" */
+.zoteroai-thinking-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.zoteroai-thinking-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--zai-r-full);
+  background: var(--zai-on-surface-variant);
+  opacity: 0.6;
+  animation: zoteroai-dot 1.2s ease-in-out infinite;
+}
+
+.zoteroai-thinking-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.zoteroai-thinking-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes zoteroai-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 
 /* Markdown body inside assistant messages */
@@ -300,7 +394,9 @@
   color: var(--zai-on-surface-variant);
   border-radius: var(--zai-r-s);
   padding: 1px 6px;
-  opacity: 0.7;
+  opacity: 0.55;
+  transition: opacity 0.15s var(--zai-ease),
+    background-color 0.15s var(--zai-ease);
 }
 
 .zoteroai-msg .zoteroai-copy:hover {
@@ -325,10 +421,16 @@
   border: none;
   border-radius: var(--zai-r-full);
   padding: 4px 12px;
+  transition: background-color 0.15s var(--zai-ease),
+    transform 0.1s var(--zai-ease);
 }
 
 .zoteroai-quick-prompts button:hover {
   background: var(--zai-surface-container-high);
+}
+
+.zoteroai-quick-prompts button:active {
+  transform: scale(0.96);
 }
 
 /* ---------- Input bar (pinned to the bottom) ---------- */
@@ -341,6 +443,15 @@
   background: var(--zai-surface-container);
   border-radius: var(--zai-r-xl);
   padding: 8px 8px 8px 14px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s var(--zai-ease),
+    background-color 0.15s var(--zai-ease), box-shadow 0.15s var(--zai-ease);
+}
+
+.zoteroai-input-row:focus-within {
+  background: var(--zai-surface-container-high);
+  border-color: var(--zai-outline);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
 
 .zoteroai-input {
@@ -357,6 +468,7 @@
   padding: 0;
   font-family: inherit;
   overflow-y: auto;
+  transition: height 0.12s var(--zai-ease);
 }
 
 .zoteroai-input::placeholder {
@@ -381,6 +493,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.15s var(--zai-ease),
+    transform 0.1s var(--zai-ease), opacity 0.15s var(--zai-ease);
+}
+
+.zoteroai-btn-col button:active {
+  transform: scale(0.9);
 }
 
 .zoteroai-btn-send {
@@ -388,9 +506,24 @@
   color: #fff;
 }
 
+.zoteroai-btn-send:hover {
+  opacity: 0.9;
+}
+
 .zoteroai-btn-stop {
   background: var(--zai-surface-container-high);
   color: var(--zai-on-surface);
+  animation: zoteroai-stop-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes zoteroai-stop-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(11, 87, 208, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(11, 87, 208, 0);
+  }
 }
 
 /* ---------- Zero state (Gemini-style greeting) ---------- */
@@ -411,14 +544,16 @@
 }
 
 .zoteroai-empty-icon {
-  font-size: 22px;
+  font-size: 24px;
   color: var(--zai-primary);
+  animation: zoteroai-fade-up 0.35s var(--zai-ease) both;
 }
 
 .zoteroai-empty-greeting {
   font-size: 17px;
   font-weight: 500;
   color: var(--zai-on-surface);
+  animation: zoteroai-fade-up 0.35s 0.05s var(--zai-ease) both;
 }
 
 .zoteroai-empty-title {
@@ -428,4 +563,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.8;
+  animation: zoteroai-fade-up 0.35s 0.1s var(--zai-ease) both;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .zoteroai-root *,
+  .zoteroai-root {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

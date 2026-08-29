@@ -589,12 +589,12 @@ export class ChatPanel {
       container.querySelector(".zoteroai-thinking")?.remove();
       const userEl = this.createMessageElement(ctx, "user", content);
       container.appendChild(userEl);
-      const pending = this.el(
-        ctx.doc,
-        "div",
-        "zoteroai-msg zoteroai-msg-assistant zoteroai-thinking",
-        "…",
-      );
+      const pending = this.el(ctx.doc, "div", "zoteroai-msg zoteroai-msg-assistant");
+      const dots = this.el(ctx.doc, "div", "zoteroai-thinking-dots");
+      for (let i = 0; i < 3; i++) {
+        dots.appendChild(this.el(ctx.doc, "span"));
+      }
+      pending.appendChild(dots);
       container.appendChild(pending);
       // Scroll just enough to bring the new message into view instead of
       // jumping to the very bottom (which would push earlier content away)
@@ -612,6 +612,7 @@ export class ChatPanel {
     let el: HTMLElement | null = null;
     let reasoningEl: HTMLElement | null = null;
     let lastRender = 0;
+    let reasoningCollapsed = false;
     // While streaming, only auto-follow when the user is already near the
     // bottom; if they scrolled up to read, don't yank the view around
     const nearBottom = () => {
@@ -623,13 +624,35 @@ export class ChatPanel {
         60
       );
     };
+    // Collapse the reasoning block with a smooth transition as soon as the
+    // actual answer starts arriving (DeepSeek/Claude-style handoff)
+    const collapseReasoning = () => {
+      if (reasoningCollapsed || !reasoningEl) {
+        return;
+      }
+      reasoningCollapsed = true;
+      const block = reasoningEl;
+      block.style.maxHeight = `${block.scrollHeight}px`;
+      // Force a style flush so the transition starts from the open state
+      void (block as any).offsetHeight;
+      block.classList.add("zoteroai-collapsing");
+      setTimeout(() => {
+        block.remove();
+        if (reasoningEl === block) {
+          reasoningEl = null;
+        }
+      }, 320);
+    };
     await this.apiClient.chatStream(history, {
       onDelta: (delta) => {
         streamed += delta;
         const now = Date.now();
+        collapseReasoning();
         if (!el && container) {
           container.querySelector(".zoteroai-thinking")?.remove();
+          container.querySelector(".zoteroai-thinking-dots")?.parentElement?.remove();
           el = this.createMessageElement(ctx, "assistant", streamed);
+          el.classList.add("zoteroai-streaming");
           container.appendChild(el);
           lastRender = now;
         } else if (el && now - lastRender >= 100) {
@@ -653,6 +676,9 @@ export class ChatPanel {
         }
         if (!reasoningEl) {
           container.querySelector(".zoteroai-thinking")?.remove();
+          container
+            .querySelector(".zoteroai-thinking-dots")
+            ?.parentElement?.remove();
           reasoningEl = this.el(
             ctx.doc,
             "div",
@@ -668,9 +694,11 @@ export class ChatPanel {
       },
       onDone: () => {
         this.setGeneratingUI(ctx, false);
-        // Hide the chain-of-thought once the answer is complete
-        reasoningEl?.remove();
-        reasoningEl = null;
+        el?.classList.remove("zoteroai-streaming");
+        // If the answer never arrived, collapse any leftover reasoning
+        if (!streamed) {
+          collapseReasoning();
+        }
         // Persist the assistant reply (created/updated in the store here —
         // during streaming the UI shows it but the store isn't touched)
         this.chatManager.setLastAssistant(convID, streamed);
@@ -690,9 +718,15 @@ export class ChatPanel {
       },
       onError: (message) => {
         this.setGeneratingUI(ctx, false);
+        el?.classList.remove("zoteroai-streaming");
         container?.querySelector(".zoteroai-thinking")?.remove();
-        reasoningEl?.remove();
-        reasoningEl = null;
+        container
+          ?.querySelector(".zoteroai-thinking-dots")
+          ?.parentElement?.remove();
+        if (reasoningEl && !reasoningCollapsed) {
+          reasoningEl.remove();
+          reasoningEl = null;
+        }
         // Keep partial output if the model already produced something;
         // otherwise drop the pending placeholder from the store view
         if (streamed) {
