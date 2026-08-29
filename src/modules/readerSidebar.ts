@@ -112,7 +112,21 @@ export class ReaderSidebarInjector {
         return;
       }
       this.mountedWindows.add(win);
-      const mount = () => this.tryMount(win);
+      let mountTimes: number[] = [];
+      const mount = () => {
+        // Circuit breaker: same storm guard as the visibility observer
+        const now = Date.now();
+        mountTimes = mountTimes.filter((t) => now - t < 1000);
+        mountTimes.push(now);
+        if (mountTimes.length > 200) {
+          ztoolkit.log(
+            "Zotero AI: injection observer storm detected — disconnecting",
+          );
+          mo.disconnect();
+          return;
+        }
+        this.tryMount(win);
+      };
       // The sidebar React tree renders lazily (only when opened) and may be
       // re-rendered; keep the injection alive through a MutationObserver.
       const mo = new win.MutationObserver(mount);
@@ -266,34 +280,52 @@ export class ReaderSidebarInjector {
   /**
    * Observe the sidebar content and reconcile view visibility on every
    * mutation. Toggling to the same class value produces no mutation, so the
-   * observer loop always settles. The observer is tracked for unregister()
-   * (dev hot-reload would otherwise leave zombie observers).
+   * observer loop always settles. A circuit breaker disconnects the observer
+   * if it ever storms (mutation→callback→mutation cycling would freeze the
+   * UI thread as an endless microtask loop).
    */
   private enforceViewVisibility(doc: Document, content: HTMLElement) {
     if ((content as any)._zoteroaiEnforceObserver) {
       return;
     }
+    // Circuit breaker state: N calls within the window trips it
+    let callTimes: number[] = [];
     const enforce = () => {
-      const panel = doc.getElementById(PANEL_ID);
-      const panelActive = !panel?.classList.contains("hidden");
-      const wrappers = this.getNativeWrappers(content);
-      if (panelActive) {
-        for (const wrapper of wrappers) {
-          wrapper.classList.add("hidden");
-        }
+      const now = Date.now();
+      callTimes = callTimes.filter((t) => now - t < 1000);
+      callTimes.push(now);
+      if (callTimes.length > 100) {
+        ztoolkit.log(
+          "Zotero AI: view-visibility observer storm detected — disconnecting",
+        );
+        ob.disconnect();
+        delete (content as any)._zoteroaiEnforceObserver;
         return;
       }
-      // Panel inactive: show the remembered native view, hide the rest.
-      // Never rely on the native buttons' .active classes — React bails
-      // out of className updates when its state is unchanged, so the DOM
-      // can desync from React's state; our own memory cannot.
-      const showIndex =
-        this.lastNativeView !== null
-          ? this.visibleWrapperIndex(this.lastNativeView, wrappers)
-          : null;
-      wrappers.forEach((wrapper, i) => {
-        wrapper.classList.toggle("hidden", showIndex !== i);
-      });
+      try {
+        const panel = doc.getElementById(PANEL_ID);
+        const panelActive = !panel?.classList.contains("hidden");
+        const wrappers = this.getNativeWrappers(content);
+        if (panelActive) {
+          for (const wrapper of wrappers) {
+            wrapper.classList.add("hidden");
+          }
+          return;
+        }
+        // Panel inactive: show the remembered native view, hide the rest.
+        // Never rely on the native buttons' .active classes — React bails
+        // out of className updates when its state is unchanged, so the DOM
+        // can desync from React's state; our own memory cannot.
+        const showIndex =
+          this.lastNativeView !== null
+            ? this.visibleWrapperIndex(this.lastNativeView, wrappers)
+            : null;
+        wrappers.forEach((wrapper, i) => {
+          wrapper.classList.toggle("hidden", showIndex !== i);
+        });
+      } catch (e) {
+        ztoolkit.log("Zotero AI: enforce error", e);
+      }
     };
     const ob = new (doc.defaultView as any).MutationObserver(enforce);
     ob.observe(content, {
