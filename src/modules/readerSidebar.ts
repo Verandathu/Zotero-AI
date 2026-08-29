@@ -134,13 +134,24 @@ export class ReaderSidebarInjector {
       panel.className = "viewWrapper hidden";
       panel.setAttribute(
         "style",
-        "position:absolute;inset:0;z-index:10;background:var(--material-background);display:flex;flex-direction:column;",
+        "position:absolute;inset:0;z-index:10;background:var(--material-background);" +
+          "display:flex;flex-direction:column;-moz-user-select:text;user-select:text;",
       );
       (content as HTMLElement).setAttribute("style", "position:relative;");
       content.appendChild(panel);
       const root = doc.createElement("div");
       root.className = "zoteroai-root";
+      // Inline style so text selection survives any cascade surprise
+      root.setAttribute("style", "-moz-user-select:text;user-select:text;");
       panel.appendChild(root);
+      // Isolate our panel from the reader's capture-phase pointer handling
+      // (annotation selection logic on the iframe document) so mouse drag
+      // selection works naturally inside the chat
+      for (const type of ["pointerdown", "mousedown", "pointerup"]) {
+        panel.addEventListener(type, (e: any) => {
+          e.stopPropagation();
+        });
+      }
     }
     // React re-renders can wipe the inline style keeping the overlay anchored
     if (!(content as HTMLElement).style.position) {
