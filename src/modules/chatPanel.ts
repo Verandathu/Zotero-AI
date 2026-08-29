@@ -575,13 +575,17 @@ export class ChatPanel {
       }
     }
 
-    const container = ctx.body.querySelector(".zoteroai-messages");
+    const container = ctx.body.querySelector(
+      ".zoteroai-messages",
+    ) as HTMLElement | null;
     if (input) {
       input.value = "";
+      input.style.height = "auto";
     }
     if (container) {
       container.querySelector(".zoteroai-thinking")?.remove();
-      container.appendChild(this.createMessageElement(ctx, "user", content));
+      const userEl = this.createMessageElement(ctx, "user", content);
+      container.appendChild(userEl);
       const pending = this.el(
         ctx.doc,
         "div",
@@ -589,7 +593,9 @@ export class ChatPanel {
         "…",
       );
       container.appendChild(pending);
-      container.scrollTop = container.scrollHeight;
+      // Scroll just enough to bring the new message into view instead of
+      // jumping to the very bottom (which would push earlier content away)
+      userEl.scrollIntoView({ block: "end" });
     }
 
     this.setGeneratingUI(ctx, true);
@@ -603,6 +609,17 @@ export class ChatPanel {
     let el: HTMLElement | null = null;
     let reasoningEl: HTMLElement | null = null;
     let lastRender = 0;
+    // While streaming, only auto-follow when the user is already near the
+    // bottom; if they scrolled up to read, don't yank the view around
+    const nearBottom = () => {
+      if (!container) {
+        return false;
+      }
+      return (
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+        60
+      );
+    };
     await this.apiClient.chatStream(history, {
       onDelta: (delta) => {
         streamed += delta;
@@ -622,7 +639,7 @@ export class ChatPanel {
             this.renderMarkdown(ctx, rendered, streamed);
           }
         }
-        if (container) {
+        if (container && nearBottom()) {
           container.scrollTop = container.scrollHeight;
         }
       },
@@ -642,7 +659,9 @@ export class ChatPanel {
         }
         // Reasoning deltas arrive fast; textContent update is cheap
         reasoningEl.textContent = reasoning;
-        container.scrollTop = container.scrollHeight;
+        if (nearBottom()) {
+          container.scrollTop = container.scrollHeight;
+        }
       },
       onDone: () => {
         this.chatManager.updateLastAssistant(convID, streamed);
@@ -655,7 +674,9 @@ export class ChatPanel {
           if (rendered) {
             this.renderMarkdown(ctx, rendered, streamed);
           }
-          container.scrollTop = container.scrollHeight;
+          if (nearBottom()) {
+            container.scrollTop = container.scrollHeight;
+          }
         }
         this.renderToolbar(ctx, this.contextProvider.getCurrentItem());
       },

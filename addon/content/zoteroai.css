@@ -154,10 +154,10 @@
 /* ---------- Messages ---------- */
 
 .zoteroai-messages {
-  flex: 1;
-  min-height: 80px;
-  max-height: 480px;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -289,6 +289,7 @@
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .zoteroai-quick-prompts button {
@@ -305,12 +306,13 @@
   background: var(--zai-surface-container-high);
 }
 
-/* ---------- Input bar (floating rounded pill) ---------- */
+/* ---------- Input bar (pinned to the bottom) ---------- */
 
 .zoteroai-input-row {
   display: flex;
   gap: 6px;
   align-items: flex-end;
+  flex-shrink: 0;
   background: var(--zai-surface-container);
   border-radius: var(--zai-r-xl);
   padding: 8px 8px 8px 14px;
@@ -329,6 +331,7 @@
   outline: none;
   padding: 0;
   font-family: inherit;
+  overflow-y: auto;
 }
 
 .zoteroai-input::placeholder {
@@ -373,9 +376,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  flex: 1;
   gap: 6px;
   padding: 32px 12px;
   color: var(--zai-on-surface-variant);
+  -moz-user-select: none !important;
+  user-select: none !important;
 }
 
 .zoteroai-empty-icon {
