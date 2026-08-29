@@ -19,13 +19,27 @@ export interface StreamCallbacks {
  */
 export class ApiClient {
   private abortController?: AbortController;
+  // Set when AbortController is unavailable and stop() relies on a flag
+  private softStopped = false;
+
+  /**
+   * The plugin sandbox has no top-level DOM globals (AbortController,
+   * fetch, TextDecoder) — resolve them from the main window.
+   */
+  private win(): any {
+    return Zotero.getMainWindow() || (Zotero as any).getActiveZoteroPane?.()?.window;
+  }
 
   get generating() {
-    return !!this.abortController;
+    return !!this.abortController || this.softStopped;
   }
 
   stop() {
-    this.abortController?.abort();
+    if (this.abortController) {
+      this.abortController.abort();
+    } else {
+      this.softStopped = true;
+    }
   }
 
   /**
@@ -59,17 +73,27 @@ export class ApiClient {
       body.max_tokens = maxTokens;
     }
 
-    this.abortController = new AbortController();
+    this.softStopped = false;
+    const win = this.win();
+    const Ctor = win?.AbortController;
+    const doFetch = win?.fetch?.bind(win) || (globalThis as any).fetch?.bind(globalThis);
+    if (!doFetch) {
+      callbacks.onError("fetch is not available in this environment.");
+      return "";
+    }
+    if (Ctor) {
+      this.abortController = new Ctor();
+    }
     let fullText = "";
     try {
-      const response = await fetch(`${baseURL}/chat/completions`, {
+      const response = await doFetch(`${baseURL}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         },
         body: JSON.stringify(body),
-        signal: this.abortController.signal,
+        ...(this.abortController ? { signal: this.abortController.signal } : {}),
       });
 
       if (!response.ok) {
@@ -108,6 +132,7 @@ export class ApiClient {
       return fullText;
     } finally {
       this.abortController = undefined;
+      this.softStopped = false;
     }
   }
 
@@ -123,14 +148,28 @@ export class ApiClient {
       throw new Error("Empty response body");
     }
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const win = this.win();
+    const Decoder = win?.TextDecoder || (globalThis as any).TextDecoder;
+    const decoder = Decoder ? new Decoder() : undefined;
     let buffer = "";
     let fullText = "";
     for (;;) {
+      if (this.softStopped) {
+        // AbortController unavailable; polling flag for stop requests
+        try {
+          await reader.cancel();
+        } catch (e) {
+          // Ignore
+        }
+        break;
+      }
       const { done, value } = await (reader as any).read();
       if (done) {
         break;
       }
+      buffer += decoder
+        ? decoder.decode(value, { stream: true })
+        : String.fromCharCode(...new Uint8Array(value));
       buffer += decoder.decode(value, { stream: true });
       // SSE events are separated by blank lines
       const events = buffer.split(/\r?\n\r?\n/);
