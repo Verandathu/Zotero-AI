@@ -83,7 +83,7 @@ export class ChatPanel {
     if (item) {
       this.updateItemBadge(ctx, item);
     }
-    this.renderToolbar(ctx, item);
+    this.renderHistory(ctx);
     this.renderQuickPrompts(ctx);
     this.renderMessages(ctx);
   }
@@ -104,7 +104,7 @@ export class ChatPanel {
         ctx.filterKey = item.key;
       }
     }
-    this.renderToolbar(ctx, item);
+    this.renderHistory(ctx);
     this.renderQuickPrompts(ctx);
     this.renderMessages(ctx);
   }
@@ -147,28 +147,30 @@ export class ChatPanel {
     const badge = this.el(doc, "div", "zoteroai-context-badge");
     badgeRow.appendChild(badge);
 
-    // --- Header: conversation + toggles row ---
+    // --- Header: history + toggles row ---
     const toolbar = this.el(doc, "div", "zoteroai-toolbar");
 
-    // Conversation switcher: native select for reliability, with adjacent
-    // rename/delete icon buttons sized properly (28px hit targets)
-    const select = this.el(
+    // Conversation history button (Gemini-sidenav style): opens a popover
+    // with "发起新对话" on top and the recent list with per-item actions
+    const btnHistory = this.el(
       doc,
-      "select",
-      "zoteroai-conversation-select",
-    ) as HTMLSelectElement;
-    select.title = "Conversation";
-    toolbar.appendChild(select);
+      "button",
+      "zoteroai-btn-history zoteroai-history-trigger",
+    );
+    btnHistory.title = getString("history-open");
+    const histIcon = this.el(doc, "span", "zoteroai-history-icon", "≡");
+    const histLabel = this.el(
+      doc,
+      "span",
+      "zoteroai-history-label",
+      getString("history-title"),
+    );
+    btnHistory.appendChild(histIcon);
+    btnHistory.appendChild(histLabel);
+    toolbar.appendChild(btnHistory);
 
-    const btnNew = this.el(doc, "button", "zoteroai-btn-new");
-    btnNew.title = getString("tooltip-new");
-    btnNew.textContent = "＋";
-    toolbar.appendChild(btnNew);
-
-    const btnDel = this.el(doc, "button", "zoteroai-btn-delete");
-    btnDel.title = getString("tooltip-delete");
-    btnDel.textContent = "🗑";
-    toolbar.appendChild(btnDel);
+    const spacer = this.el(doc, "div", "zoteroai-toolbar-spacer");
+    toolbar.appendChild(spacer);
 
     // Follow / full-text as real toggle pills (checkbox visually hidden)
     const followLabel = this.el(doc, "label", "zoteroai-toggle-pill");
@@ -192,6 +194,27 @@ export class ChatPanel {
       this.el(doc, "span", undefined, getString("toggle-fulltext")),
     );
     toolbar.appendChild(fullTextLabel);
+
+    // History popover (hidden by default, anchored under the toolbar)
+    const popover = this.el(doc, "div", "zoteroai-history-popover hidden");
+    const newBtn = this.el(
+      doc,
+      "button",
+      "zoteroai-history-new",
+      `＋  ${getString("history-new")}`,
+    );
+    popover.appendChild(newBtn);
+    popover.appendChild(
+      this.el(
+        doc,
+        "div",
+        "zoteroai-history-header",
+        getString("history-recent"),
+      ),
+    );
+    const historyList = this.el(doc, "div", "zoteroai-history-list");
+    popover.appendChild(historyList);
+    body.appendChild(popover);
 
     body.appendChild(badgeRow);
     body.appendChild(toolbar);
@@ -227,60 +250,38 @@ export class ChatPanel {
       input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
       btnAction.classList.toggle("zoteroai-empty", !input.value.trim());
     });
+
+    // History popover open/close
+    btnHistory.addEventListener("click", (e: any) => {
+      e.stopPropagation();
+      const pop = body.querySelector(
+        ".zoteroai-history-popover",
+      ) as HTMLElement;
+      if (pop) {
+        const opening = pop.classList.contains("hidden");
+        pop.classList.toggle("hidden");
+        if (opening) {
+          this.renderHistory(ctx);
+        }
+      }
+    });
+    // Click anywhere else closes it
+    doc.addEventListener("click", (e: any) => {
+      const pop = body.querySelector(".zoteroai-history-popover");
+      if (pop && !pop.classList.contains("hidden")) {
+        const t = e.target as HTMLElement;
+        if (!pop.contains(t)) {
+          pop.classList.add("hidden");
+        }
+      }
+    });
   }
 
   private bindEvents(ctx: PanelContext) {
     const { body } = ctx;
     const $ = (sel: string) => body.querySelector(sel);
 
-    ($(".zoteroai-conversation-select") as HTMLSelectElement)?.addEventListener(
-      "change",
-      (e: any) => {
-        this.chatManager.setActive(e.target.value);
-        ctx.convID = e.target.value;
-        this.renderMessages(ctx);
-      },
-    );
-
-    $(".zoteroai-btn-new")?.addEventListener("click", () => {
-      const item = this.contextProvider.getCurrentItem();
-      const conv = this.chatManager.createConversation(
-        item
-          ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
-          : undefined,
-      );
-      ctx.convID = conv.id;
-      this.renderToolbar(ctx, item);
-      this.renderMessages(ctx);
-    });
-
-    // Delete asks for confirmation inline (double-click = confirm) since
-    // window.confirm is unavailable in the reader sandbox
-    let deleteArmed = 0;
-    $(".zoteroai-btn-delete")?.addEventListener("click", () => {
-      const btn = ctx.body.querySelector(".zoteroai-btn-delete") as HTMLElement;
-      const now = Date.now();
-      if (!ctx.convID) {
-        return;
-      }
-      if (now - deleteArmed > 2500) {
-        // First click: arm and give visual feedback
-        deleteArmed = now;
-        btn?.classList.add("zoteroai-danger");
-        btn?.setAttribute("title", getString("tooltip-delete-confirm"));
-        setTimeout(() => {
-          btn?.classList.remove("zoteroai-danger");
-          btn?.setAttribute("title", getString("tooltip-delete"));
-        }, 2500);
-        return;
-      }
-      deleteArmed = 0;
-      btn?.classList.remove("zoteroai-danger");
-      this.chatManager.deleteConversation(ctx.convID);
-      ctx.convID = this.chatManager.active?.id || null;
-      this.renderToolbar(ctx, this.contextProvider.getCurrentItem());
-      this.renderMessages(ctx);
-    });
+    // History popover interactions are bound in renderHistory (per-item)
 
     // Single action button: send when idle, stop while generating
     $(".zoteroai-btn-action")?.addEventListener("click", () => {
@@ -317,13 +318,38 @@ export class ChatPanel {
     }
   }
 
-  /** Fill the conversation dropdown for the current filter view. */
-  private renderToolbar(ctx: PanelContext, item?: Zotero.Item) {
+  /** Start a fresh conversation bound to the current item. */
+  private startNewConversation(ctx: PanelContext) {
+    const item = this.contextProvider.getCurrentItem();
+    const conv = this.chatManager.createConversation(
+      item
+        ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
+        : undefined,
+    );
+    ctx.convID = conv.id;
+    this.renderHistory(ctx);
+    this.renderMessages(ctx);
+  }
+
+  /** Switch the panel to a conversation. */
+  private switchConversation(ctx: PanelContext, id: string) {
+    this.chatManager.setActive(id);
+    ctx.convID = id;
+    this.renderHistory(ctx);
+    this.renderMessages(ctx);
+  }
+
+  /**
+   * Render the history popover: a "发起新对话" action on top, then the
+   * recent list for the current filter view, each row with rename/delete
+   * actions (Gemini sidenav pattern).
+   */
+  private renderHistory(ctx: PanelContext) {
     const { body, doc } = ctx;
-    const select = body.querySelector(
-      ".zoteroai-conversation-select",
-    ) as HTMLSelectElement;
-    if (!select) {
+    const pop = body.querySelector(".zoteroai-history-popover") as HTMLElement;
+    const list = body.querySelector(".zoteroai-history-list") as HTMLElement;
+    const newBtn = body.querySelector(".zoteroai-history-new") as HTMLElement;
+    if (!pop || !list || !newBtn) {
       return;
     }
     const fullTextCheckbox = body.querySelector(
@@ -332,33 +358,91 @@ export class ChatPanel {
     if (fullTextCheckbox) {
       fullTextCheckbox.checked = !!getPref("includeFullText");
     }
-
-    const conversations = this.chatManager.listFor(ctx.filterKey);
-    select.innerHTML = "";
-    for (const conv of conversations) {
-      const option = this.el(
-        doc,
-        "option",
-        undefined,
-        conv.title,
-      ) as HTMLOptionElement;
-      option.value = conv.id;
-      select.appendChild(option);
-    }
-    if (!conversations.length) {
-      const option = this.el(
-        doc,
-        "option",
-        undefined,
-        "—",
-      ) as HTMLOptionElement;
-      option.value = "";
-      select.appendChild(option);
-    }
     const active = this.chatManager.active;
     ctx.convID = active?.id || null;
-    if (active) {
-      select.value = active.id;
+
+    newBtn.onclick = () => {
+      this.startNewConversation(ctx);
+      pop.classList.add("hidden");
+    };
+
+    list.innerHTML = "";
+    const conversations = this.chatManager.listFor(ctx.filterKey);
+    if (!conversations.length) {
+      list.appendChild(
+        this.el(
+          doc,
+          "div",
+          "zoteroai-history-empty",
+          getString("history-empty"),
+        ),
+      );
+      return;
+    }
+    for (const conv of conversations) {
+      const row = this.el(doc, "div", "zoteroai-history-item");
+      if (conv.id === active?.id) {
+        row.classList.add("zoteroai-active");
+      }
+      const title = this.el(
+        doc,
+        "span",
+        "zoteroai-history-item-title",
+        conv.title,
+      );
+      title.title = conv.title;
+      title.addEventListener("click", () => {
+        this.switchConversation(ctx, conv.id);
+        pop.classList.add("hidden");
+      });
+      const actions = this.el(doc, "div", "zoteroai-history-item-actions");
+      const renameBtn = this.el(doc, "button", "zoteroai-history-act", "✎");
+      renameBtn.title = getString("history-rename");
+      const delBtn = this.el(doc, "button", "zoteroai-history-act", "🗑");
+      delBtn.title = getString("tooltip-delete");
+      actions.appendChild(renameBtn);
+      actions.appendChild(delBtn);
+      row.appendChild(title);
+      row.appendChild(actions);
+      list.appendChild(row);
+
+      renameBtn.addEventListener("click", (e: any) => {
+        e.stopPropagation();
+        // Inline rename: swap the title span for an input
+        const input = this.el(
+          doc,
+          "input",
+          "zoteroai-history-rename",
+        ) as HTMLInputElement;
+        input.value = conv.title;
+        row.replaceChild(input, title);
+        input.focus();
+        input.select();
+        const commit = () => {
+          const v = input.value.trim();
+          if (v && v !== conv.title) {
+            this.chatManager.renameConversation(conv.id, v);
+          }
+          this.renderHistory(ctx);
+        };
+        input.addEventListener("keydown", (ev: any) => {
+          if (ev.key === "Enter") {
+            commit();
+          } else if (ev.key === "Escape") {
+            this.renderHistory(ctx);
+          }
+        });
+        input.addEventListener("blur", commit);
+      });
+      delBtn.addEventListener("click", (e: any) => {
+        e.stopPropagation();
+        this.chatManager.deleteConversation(conv.id);
+        if (ctx.convID === conv.id) {
+          ctx.convID = this.chatManager.active?.id || null;
+          this.renderMessages(ctx);
+        }
+        this.renderHistory(ctx);
+      });
     }
   }
 
@@ -453,26 +537,31 @@ export class ChatPanel {
       el.textContent = content;
       return el;
     }
-    // Assistant messages: render markdown with a copy button
-    const copyBtn = this.el(
-      ctx.doc,
-      "button",
-      "zoteroai-copy",
-      getString("panel-copy"),
-    );
-    copyBtn.addEventListener("click", () => {
-      const win = ctx.doc.defaultView as any;
-      if (win?.Zotero?.Utilities?.Internal?.copyTextToClipboard) {
-        win.Zotero.Utilities.Internal.copyTextToClipboard(content);
-      } else {
-        Zotero.Utilities.Internal.copyTextToClipboard(content);
-      }
-    });
+    // Assistant messages: markdown body + a footer actions row (Gemini puts
+    // copy under the response, never floating over the text)
     const rendered = this.el(ctx.doc, "div");
     rendered.dataset.role = "zoteroai-markdown";
     this.renderMarkdown(ctx, rendered, content);
-    el.appendChild(copyBtn);
     el.appendChild(rendered);
+    if (content) {
+      const footer = this.el(ctx.doc, "div", "zoteroai-msg-footer");
+      const copyBtn = this.el(
+        ctx.doc,
+        "button",
+        "zoteroai-copy",
+        getString("panel-copy"),
+      );
+      copyBtn.addEventListener("click", () => {
+        const win = ctx.doc.defaultView as any;
+        if (win?.Zotero?.Utilities?.Internal?.copyTextToClipboard) {
+          win.Zotero.Utilities.Internal.copyTextToClipboard(content);
+        } else {
+          Zotero.Utilities.Internal.copyTextToClipboard(content);
+        }
+      });
+      footer.appendChild(copyBtn);
+      el.appendChild(footer);
+    }
     return el;
   }
 

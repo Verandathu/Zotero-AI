@@ -25,6 +25,7 @@
   --zai-r-full: 9999px;
   --zai-ease: cubic-bezier(0.2, 0, 0, 1);
 
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -71,6 +72,162 @@
     --zai-outline: #444746;
     --zai-surface-container-lowest: #1e1f20;
   }
+}
+
+/* ---------- History popover (Gemini sidenav pattern) ---------- */
+
+.zoteroai-btn-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 8px;
+  border-radius: var(--zai-r-full);
+  font-size: 12px;
+  color: var(--zai-on-surface);
+}
+
+.zoteroai-history-icon {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--zai-primary);
+}
+
+.zoteroai-toolbar-spacer {
+  flex: 1;
+}
+
+.zoteroai-history-popover {
+  position: absolute;
+  top: 4px;
+  left: 12px;
+  right: 12px;
+  z-index: 30;
+  max-height: 70%;
+  overflow-y: auto;
+  background: var(--zai-surface-container-lowest, #fff);
+  border: 1px solid var(--zai-outline);
+  border-radius: var(--zai-r-l);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  padding: 6px;
+  animation: zoteroai-fade-up 0.16s var(--zai-ease) both;
+}
+
+.zoteroai-history-popover.hidden {
+  display: none !important;
+}
+
+.zoteroai-history-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--zai-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--zai-r-m);
+  padding: 9px 10px;
+  transition: background-color 0.15s var(--zai-ease);
+}
+
+.zoteroai-history-new:hover {
+  background: var(--zai-surface-container);
+}
+
+.zoteroai-history-header {
+  font-size: 11px;
+  color: var(--zai-on-surface-variant);
+  padding: 6px 10px 4px;
+  border-top: 1px solid var(--zai-surface-container);
+  margin-top: 4px;
+}
+
+.zoteroai-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.zoteroai-history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--zai-r-m);
+  padding: 2px 4px 2px 10px;
+  transition: background-color 0.15s var(--zai-ease);
+}
+
+.zoteroai-history-item:hover {
+  background: var(--zai-surface-container);
+}
+
+.zoteroai-history-item.zoteroai-active {
+  background: var(--zai-primary-container);
+}
+
+.zoteroai-history-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--zai-on-surface);
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.zoteroai-history-item-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s var(--zai-ease);
+}
+
+.zoteroai-history-item:hover .zoteroai-history-item-actions,
+.zoteroai-history-item.zoteroai-active .zoteroai-history-item-actions {
+  opacity: 1;
+}
+
+.zoteroai-history-act {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  border-radius: var(--zai-r-full);
+  color: var(--zai-on-surface-variant);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoteroai-history-act:hover {
+  background: var(--zai-surface-container-high);
+  color: var(--zai-on-surface);
+}
+
+.zoteroai-history-rename {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--zai-primary);
+  border-radius: var(--zai-r-s);
+  background: var(--zai-surface-container-lowest, #fff);
+  color: var(--zai-on-surface);
+  outline: none;
+}
+
+.zoteroai-history-empty {
+  font-size: 12px;
+  color: var(--zai-on-surface-variant);
+  padding: 10px;
+  text-align: center;
 }
 
 /* ---------- Header ---------- */
@@ -258,15 +415,15 @@
 
 /* User query: right-aligned pill */
 .zoteroai-msg-user {
+  /* Gemini: right-aligned neutral bubble, 24px radius, ~460px max width */
   align-self: flex-end;
-  max-width: 85%;
+  max-width: min(85%, 460px);
   min-width: 0;
   width: fit-content;
-  background: var(--zai-primary-container);
-  color: var(--zai-on-primary-container);
+  background: var(--zai-surface-container-high);
+  color: var(--zai-on-surface);
   border-radius: var(--zai-r-xl);
-  border-bottom-right-radius: 4px;
-  padding: 8px 14px;
+  padding: 10px 16px;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -457,11 +614,18 @@
   background: none;
   color: var(--zai-on-surface-variant);
   border-radius: var(--zai-r-s);
-  padding: 1px 6px;
-  opacity: 0.55;
+  padding: 2px 8px;
+  opacity: 0.6;
   transition:
     opacity 0.15s var(--zai-ease),
     background-color 0.15s var(--zai-ease);
+}
+
+/* Footer row under assistant text holding the actions (Gemini pattern) */
+.zoteroai-msg-footer {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .zoteroai-msg .zoteroai-copy:hover {
@@ -517,7 +681,7 @@
   display: flex;
   gap: 8px;
   align-items: flex-end;
-  background: var(--zai-surface-container);
+  background: var(--zai-surface-container-lowest, #fff);
   border-radius: var(--zai-r-xl);
   padding: 5px 5px 5px 14px;
   border: 1px solid transparent;

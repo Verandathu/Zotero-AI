@@ -3,6 +3,12 @@
 /* eslint-disable */
 // @ts-nocheck
 export type FluentMessageId =
+  | 'history-empty'
+  | 'history-new'
+  | 'history-open'
+  | 'history-recent'
+  | 'history-rename'
+  | 'history-title'
   | 'panel-copy'
   | 'panel-empty-hint'
   | 'panel-empty-hint-generic'
