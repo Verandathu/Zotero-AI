@@ -15,6 +15,7 @@ declare namespace _ZoteroTypes {
       "maxTokens": number;
       "includeFullText": boolean;
       "fullTextLimit": number;
+      "contextWindowTokens": number;
       "systemPrompt": string;
       "quickPrompts": string;
     };

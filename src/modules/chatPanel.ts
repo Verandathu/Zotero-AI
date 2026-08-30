@@ -1,32 +1,61 @@
 import { getLocaleID, getString } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
 import { ApiClient, ChatMessage } from "./apiClient";
-import { ChatManager } from "./chatManager";
+import { ChatManager, Conversation, ConversationMessage } from "./chatManager";
+import { estimateContextUsage } from "./contextEstimator";
 import { ContextProvider, ItemContext } from "./contextProvider";
 import { getQuickPrompts } from "./quickPrompts";
 
-// Module top-level code must not reference the global `addon` — bundled
-// modules evaluate before index.ts assigns it. The ref is fixed at build time.
 const PANE_ID = "zoteroai-chat";
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
+
+type HistoryFilter = "all" | "item";
+type GenerationPhase = "preparing" | "waiting" | "streaming";
 
 interface PanelContext {
   body: HTMLElement;
   doc: Document;
   convID: string | null;
-  /** Item key the panel is currently bound to (for the filter view) */
-  filterKey: string | null;
+  currentItemKey: string | null;
+  filter: HistoryFilter;
+  contextPrompt: string;
+  contextLoading: boolean;
+  contextVersion: number;
+  meterBlocked: boolean;
+  drawerReturnFocus?: HTMLElement;
+  inputTimer?: any;
 }
+
+interface GenerationState {
+  convID: string;
+  phase: GenerationPhase;
+  cancelled: boolean;
+}
+
+const ICONS: Record<string, string> = {
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
+  edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z"/><path d="m13.5 7 3.5 3.5"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/>',
+  copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  retry: '<path d="M20 6v5h-5"/><path d="M19 11a8 8 0 1 0 1 5"/>',
+  send: '<path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="1"/>',
+  quote: '<path d="M6 8h5v5H7c0 2 1 3 3 4M14 8h5v5h-4c0 2 1 3 3 4"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+};
 
 export class ChatPanel {
   apiClient = new ApiClient();
   chatManager = new ChatManager();
   contextProvider = new ContextProvider();
 
-  // One panel context per mounted UI (library section, reader overlay, ...)
   private panels = new Map<HTMLElement, PanelContext>();
-  /** True from click to stream end — closes the async double-send window */
+  private contextCache = new Map<string, Promise<ItemContext | null>>();
   private sending = false;
+  private generation: GenerationState | null = null;
 
   register() {
     let result: false | string;
@@ -56,7 +85,6 @@ export class ChatPanel {
         void this.mountSection(body, item, tabType);
       },
       onItemChange: ({ item, tabType, setEnabled }: any) => {
-        // In reader tabs the chat lives in the reader's left sidebar instead
         setEnabled(tabType === "library" && !!item);
       },
     });
@@ -68,11 +96,9 @@ export class ChatPanel {
     } catch (e) {
       ztoolkit.log("Zotero AI: unregisterSection failed", e);
     }
+    this.chatManager.dispose();
   }
 
-  /**
-   * Mount (or update) the chat inside a library item pane section body.
-   */
   private async mountSection(
     body: HTMLElement,
     item?: Zotero.Item,
@@ -80,42 +106,35 @@ export class ChatPanel {
   ) {
     await this.chatManager.load();
     const ctx = this.ensurePanel(body, body.ownerDocument!);
-    if (item) {
-      this.updateItemBadge(ctx, item);
-    }
-    this.renderHistory(ctx);
-    this.renderQuickPrompts(ctx);
-    this.renderMessages(ctx);
+    ctx.currentItemKey = item?.key || null;
+    this.renderAll(ctx);
+    void this.refreshContext(ctx);
   }
 
-  /**
-   * Mount the chat inside a reader sidebar overlay container.
-   */
   async mountReaderPanel(root: HTMLElement, doc: Document) {
     await this.chatManager.load();
     const ctx = this.ensurePanel(root, doc);
-    const item = this.contextProvider.getCurrentItem();
-    if (item) {
-      this.updateItemBadge(ctx, item);
-      if (
-        (root.querySelector(".zoteroai-ctx-follow") as HTMLInputElement)
-          ?.checked
-      ) {
-        ctx.filterKey = item.key;
-      }
-    }
-    this.renderHistory(ctx);
-    this.renderQuickPrompts(ctx);
-    this.renderMessages(ctx);
+    ctx.currentItemKey = this.contextProvider.getCurrentItem()?.key || null;
+    this.renderAll(ctx);
+    void this.refreshContext(ctx);
   }
 
-  /** Build the UI structure into the container once, and bind events. */
   private ensurePanel(body: HTMLElement, doc: Document): PanelContext {
-    let ctx = this.panels.get(body);
-    if (ctx) {
-      return ctx;
+    const existing = this.panels.get(body);
+    if (existing) {
+      return existing;
     }
-    ctx = { body, doc, convID: null, filterKey: null };
+    const ctx: PanelContext = {
+      body,
+      doc,
+      convID: null,
+      currentItemKey: null,
+      filter: "all",
+      contextPrompt: this.buildSystemPrompt(null),
+      contextLoading: false,
+      contextVersion: 0,
+      meterBlocked: false,
+    };
     this.panels.set(body, ctx);
     this.buildUI(ctx);
     this.bindEvents(ctx);
@@ -128,111 +147,166 @@ export class ChatPanel {
     cls?: string,
     text?: string,
   ): HTMLElement {
-    const e = doc.createElementNS(XHTML_NS, tag) as HTMLElement;
-    if (cls) {
-      e.className = cls;
-    }
-    if (text !== undefined) {
-      e.textContent = text;
-    }
-    return e;
+    const element = doc.createElementNS(XHTML_NS, tag) as HTMLElement;
+    if (cls) element.className = cls;
+    if (text !== undefined) element.textContent = text;
+    return element;
   }
 
-  /** Programmatically build the chat UI (works in XUL and HTML documents). */
-  private buildUI(ctx: PanelContext) {
-    const { body, doc } = ctx;
+  private icon(doc: Document, name: keyof typeof ICONS): HTMLElement {
+    const icon = this.el(doc, "span", "zoteroai-icon");
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+    return icon;
+  }
 
-    // --- Header: item badge row ---
-    const badgeRow = this.el(doc, "div", "zoteroai-badge-row");
-    const badge = this.el(doc, "div", "zoteroai-context-badge");
-    badgeRow.appendChild(badge);
-
-    // --- Header: history + toggles row ---
-    const toolbar = this.el(doc, "div", "zoteroai-toolbar");
-
-    // Conversation history button (Gemini-sidenav style): opens a popover
-    // with "发起新对话" on top and the recent list with per-item actions
-    const btnHistory = this.el(
+  private iconButton(
+    doc: Document,
+    cls: string,
+    icon: keyof typeof ICONS,
+    label: string,
+  ): HTMLButtonElement {
+    const button = this.el(
       doc,
       "button",
-      "zoteroai-btn-history zoteroai-history-trigger",
+      `zoteroai-icon-btn ${cls}`,
+    ) as HTMLButtonElement;
+    button.type = "button";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.appendChild(this.icon(doc, icon));
+    return button;
+  }
+
+  private buildUI(ctx: PanelContext) {
+    const { body, doc } = ctx;
+    body.innerHTML = "";
+
+    const scrim = this.el(doc, "div", "zoteroai-history-scrim");
+    const drawer = this.el(doc, "aside", "zoteroai-history-drawer");
+    drawer.setAttribute("role", "dialog");
+    drawer.setAttribute("aria-modal", "true");
+    drawer.setAttribute("aria-label", getString("history-title"));
+    drawer.setAttribute("aria-hidden", "true");
+    const drawerHead = this.el(doc, "div", "zoteroai-history-head");
+    const drawerNew = this.el(doc, "button", "zoteroai-history-new");
+    drawerNew.appendChild(this.icon(doc, "plus"));
+    drawerNew.appendChild(
+      this.el(doc, "span", undefined, getString("history-new")),
     );
-    btnHistory.title = getString("history-open");
-    const histIcon = this.el(doc, "span", "zoteroai-history-icon", "≡");
-    const histLabel = this.el(
+    drawerHead.appendChild(drawerNew);
+    drawerHead.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-history-close",
+        "close",
+        getString("panel-close"),
+      ),
+    );
+    drawer.appendChild(drawerHead);
+
+    const searchWrap = this.el(doc, "label", "zoteroai-history-search-wrap");
+    searchWrap.appendChild(this.icon(doc, "search"));
+    const search = this.el(
       doc,
-      "span",
-      "zoteroai-history-label",
-      getString("history-title"),
+      "input",
+      "zoteroai-history-search",
+    ) as HTMLInputElement;
+    search.type = "search";
+    search.placeholder = getString("history-search");
+    search.setAttribute("aria-label", getString("history-search"));
+    searchWrap.appendChild(search);
+    drawer.appendChild(searchWrap);
+
+    const filters = this.el(doc, "div", "zoteroai-history-filters");
+    filters.setAttribute("role", "group");
+    for (const [value, key] of [
+      ["all", "history-filter-all"],
+      ["item", "history-filter-item"],
+    ] as const) {
+      const button = this.el(
+        doc,
+        "button",
+        "zoteroai-history-filter",
+        getString(key),
+      );
+      button.dataset.filter = value;
+      filters.appendChild(button);
+    }
+    drawer.appendChild(filters);
+    drawer.appendChild(this.el(doc, "div", "zoteroai-history-list"));
+    body.appendChild(scrim);
+    body.appendChild(drawer);
+
+    const header = this.el(doc, "header", "zoteroai-header");
+    const topbar = this.el(doc, "div", "zoteroai-topbar");
+    topbar.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-history-trigger",
+        "menu",
+        getString("history-open"),
+      ),
     );
-    btnHistory.appendChild(histIcon);
-    btnHistory.appendChild(histLabel);
-    toolbar.appendChild(btnHistory);
-
-    const spacer = this.el(doc, "div", "zoteroai-toolbar-spacer");
-    toolbar.appendChild(spacer);
-
-    // Follow / full-text as real toggle pills (checkbox visually hidden)
-    const followLabel = this.el(doc, "label", "zoteroai-toggle-pill");
-    const follow = this.el(doc, "input") as HTMLInputElement;
-    follow.type = "checkbox";
-    follow.checked = true;
-    follow.classList.add("zoteroai-ctx-follow");
-    followLabel.appendChild(follow);
-    followLabel.appendChild(
-      this.el(doc, "span", undefined, getString("toggle-follow")),
+    const title = this.el(
+      doc,
+      "div",
+      "zoteroai-conversation-title",
+      getString("panel-title"),
     );
-    toolbar.appendChild(followLabel);
+    title.setAttribute("aria-live", "polite");
+    topbar.appendChild(title);
+    topbar.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-new-trigger",
+        "plus",
+        getString("history-new"),
+      ),
+    );
+    header.appendChild(topbar);
 
+    const contextRow = this.el(doc, "div", "zoteroai-context-row");
+    const badge = this.el(doc, "div", "zoteroai-context-badge");
+    contextRow.appendChild(badge);
+    const useCurrent = this.el(
+      doc,
+      "button",
+      "zoteroai-use-current",
+      getString("context-use-current"),
+    ) as HTMLButtonElement;
+    useCurrent.type = "button";
+    useCurrent.hidden = true;
+    contextRow.appendChild(useCurrent);
     const fullTextLabel = this.el(doc, "label", "zoteroai-toggle-pill");
     const fullText = this.el(doc, "input") as HTMLInputElement;
     fullText.type = "checkbox";
     fullText.checked = !!getPref("includeFullText");
-    fullText.classList.add("zoteroai-ctx-fulltext");
+    fullText.className = "zoteroai-ctx-fulltext";
+    fullTextLabel.dataset.checked = String(fullText.checked);
     fullTextLabel.appendChild(fullText);
     fullTextLabel.appendChild(
       this.el(doc, "span", undefined, getString("toggle-fulltext")),
     );
-    toolbar.appendChild(fullTextLabel);
+    contextRow.appendChild(fullTextLabel);
+    header.appendChild(contextRow);
+    body.appendChild(header);
 
-    // History drawer (Gemini sidenav pattern): slides in from the left edge
-    // over a dimming scrim. Open state = .zoteroai-history-open on the root.
-    const scrim = this.el(doc, "div", "zoteroai-history-scrim");
-    const popover = this.el(doc, "div", "zoteroai-history-popover");
-    const histHead = this.el(doc, "div", "zoteroai-history-head");
-    const newBtn = this.el(
-      doc,
-      "button",
-      "zoteroai-history-new",
-      `✦  ${getString("history-new")}`,
-    );
-    const closeBtn = this.el(doc, "button", "zoteroai-history-close", "✕");
-    closeBtn.title = getString("panel-close");
-    histHead.appendChild(newBtn);
-    histHead.appendChild(closeBtn);
-    popover.appendChild(histHead);
-    popover.appendChild(
-      this.el(
+    const messages = this.el(doc, "main", "zoteroai-messages");
+    messages.setAttribute("aria-live", "polite");
+    body.appendChild(messages);
+    body.appendChild(
+      this.iconButton(
         doc,
-        "div",
-        "zoteroai-history-header",
-        getString("history-recent"),
+        "zoteroai-scroll-bottom",
+        "down",
+        getString("scroll-bottom"),
       ),
     );
-    const historyList = this.el(doc, "div", "zoteroai-history-list");
-    popover.appendChild(historyList);
-    body.appendChild(scrim);
-    body.appendChild(popover);
 
-    body.appendChild(badgeRow);
-    body.appendChild(toolbar);
-    body.appendChild(this.el(doc, "div", "zoteroai-messages"));
-
-    // Bottom composer: quick chips + rounded input bar (single row:
-    // textarea flexes, circular action button bottom-aligned, no overlap)
-    const composer = this.el(doc, "div", "zoteroai-composer");
+    const composer = this.el(doc, "footer", "zoteroai-composer");
     composer.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
-    const inputRow = this.el(doc, "div", "zoteroai-input-row");
+    const inputShell = this.el(doc, "div", "zoteroai-input-shell");
     const input = this.el(
       doc,
       "textarea",
@@ -240,390 +314,1023 @@ export class ChatPanel {
     ) as HTMLTextAreaElement;
     input.rows = 1;
     input.placeholder = getString("panel-input-hint");
-    inputRow.appendChild(input);
-    const btnAction = this.el(
-      doc,
-      "button",
-      "zoteroai-btn-action zoteroai-mode-send zoteroai-empty",
+    inputShell.appendChild(input);
+    inputShell.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-insert-selection",
+        "quote",
+        getString("panel-insert-selection"),
+      ),
     );
-    btnAction.title = getString("panel-send");
-    btnAction.textContent = "➤";
-    inputRow.appendChild(btnAction);
-    composer.appendChild(inputRow);
+    inputShell.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-btn-action zoteroai-mode-send",
+        "send",
+        getString("panel-send"),
+      ),
+    );
+    composer.appendChild(inputShell);
+
+    const meter = this.el(doc, "div", "zoteroai-context-meter");
+    const track = this.el(doc, "div", "zoteroai-context-track");
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    track.appendChild(this.el(doc, "div", "zoteroai-context-fill"));
+    meter.appendChild(track);
+    meter.appendChild(this.el(doc, "span", "zoteroai-context-meter-label"));
+    composer.appendChild(meter);
+    const liveRegion = this.el(doc, "div", "zoteroai-live-region");
+    liveRegion.setAttribute("role", "status");
+    liveRegion.setAttribute("aria-live", "polite");
+    composer.appendChild(liveRegion);
     body.appendChild(composer);
-
-    // Auto-grow the textarea while typing; dim the send button while empty
-    input.addEventListener("input", () => {
-      input.style.height = "auto";
-      input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
-      btnAction.classList.toggle("zoteroai-empty", !input.value.trim());
-    });
-
-    // History drawer open/close (state class on the root drives CSS)
-    const openHistory = () => {
-      body.classList.add("zoteroai-history-open");
-      this.renderHistory(ctx);
-    };
-    const closeHistory = () => body.classList.remove("zoteroai-history-open");
-    btnHistory.addEventListener("click", (e: any) => {
-      e.stopPropagation();
-      if (body.classList.contains("zoteroai-history-open")) {
-        closeHistory();
-      } else {
-        openHistory();
-      }
-    });
-    closeBtn.addEventListener("click", closeHistory);
-    scrim.addEventListener("click", closeHistory);
+    body.appendChild(this.el(doc, "div", "zoteroai-snackbar"));
   }
 
   private bindEvents(ctx: PanelContext) {
     const { body } = ctx;
-    const $ = (sel: string) => body.querySelector(sel);
-
-    // History popover interactions are bound in renderHistory (per-item)
-
-    // Single action button: send when idle, stop while generating
+    const $ = <T extends Element>(selector: string) =>
+      body.querySelector(selector) as T | null;
+    $(".zoteroai-history-trigger")?.addEventListener("click", (event: Event) =>
+      this.openHistory(ctx, event.currentTarget as HTMLElement),
+    );
+    $(".zoteroai-history-close")?.addEventListener("click", () =>
+      this.closeHistory(ctx),
+    );
+    $(".zoteroai-history-scrim")?.addEventListener("click", () =>
+      this.closeHistory(ctx),
+    );
+    $(".zoteroai-history-new")?.addEventListener("click", () => {
+      this.startNewConversation(ctx);
+      this.closeHistory(ctx);
+    });
+    $(".zoteroai-new-trigger")?.addEventListener("click", () =>
+      this.startNewConversation(ctx),
+    );
+    $(".zoteroai-use-current")?.addEventListener("click", () =>
+      this.startNewConversation(ctx),
+    );
+    $(".zoteroai-history-search")?.addEventListener("input", () =>
+      this.renderHistory(ctx),
+    );
+    body
+      .querySelectorAll(".zoteroai-history-filter")
+      .forEach((button: Element) => {
+        button.addEventListener("click", () => {
+          ctx.filter = (button as HTMLElement).dataset.filter as HistoryFilter;
+          this.renderHistory(ctx);
+        });
+      });
+    $(".zoteroai-history-drawer")?.addEventListener(
+      "keydown",
+      (event: Event) => {
+        const keyboard = event as KeyboardEvent;
+        if (keyboard.key === "Escape") {
+          keyboard.preventDefault();
+          this.closeHistory(ctx);
+        } else if (keyboard.key === "Tab") {
+          this.trapDrawerFocus(ctx, keyboard);
+        }
+      },
+    );
+    $(".zoteroai-ctx-fulltext")?.addEventListener("change", (event: Event) => {
+      const checked = (event.target as HTMLInputElement).checked;
+      setPref("includeFullText", checked);
+      (
+        (event.target as HTMLInputElement).parentElement as HTMLElement
+      ).dataset.checked = String(checked);
+      this.contextCache.clear();
+      for (const panel of this.panels.values()) void this.refreshContext(panel);
+    });
     $(".zoteroai-btn-action")?.addEventListener("click", () => {
-      if (this.apiClient.generating) {
-        this.apiClient.stop();
-      } else {
+      if (this.generation) this.stopGeneration();
+      else void this.send(ctx);
+    });
+    $(".zoteroai-insert-selection")?.addEventListener("click", () =>
+      this.insertSelection(ctx),
+    );
+    const input = $(".zoteroai-input") as HTMLTextAreaElement | null;
+    input?.addEventListener("input", () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 144)}px`;
+      clearTimeout(ctx.inputTimer);
+      ctx.inputTimer = setTimeout(() => this.updateContextMeter(ctx), 120);
+      this.setGeneratingUI(ctx);
+    });
+    input?.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
         void this.send(ctx);
       }
     });
-
-    ($(".zoteroai-ctx-fulltext") as HTMLInputElement)?.addEventListener(
-      "click",
-      (e: any) => {
-        setPref("includeFullText", e.target.checked);
-      },
-    );
-
-    const input = $(".zoteroai-input") as HTMLTextAreaElement;
-    input?.addEventListener("keydown", (e: any) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-        e.preventDefault();
-        void this.send(ctx);
-      }
+    const messages = $(".zoteroai-messages") as HTMLElement | null;
+    messages?.addEventListener("scroll", () => this.updateScrollButton(ctx));
+    $(".zoteroai-scroll-bottom")?.addEventListener("click", () => {
+      messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
     });
   }
 
-  private updateItemBadge(ctx: PanelContext, item: Zotero.Item) {
+  private renderAll(ctx: PanelContext) {
+    ctx.convID = this.chatManager.active?.id || null;
+    this.renderHeader(ctx);
+    this.renderHistory(ctx);
+    this.renderQuickPrompts(ctx);
+    this.renderMessages(ctx);
+    this.updateContextMeter(ctx);
+    this.setGeneratingUI(ctx);
+  }
+
+  private renderHeader(ctx: PanelContext) {
+    const conversation = this.chatManager.active;
+    const current = this.contextProvider.getCurrentItem();
+    ctx.currentItemKey = current?.key || ctx.currentItemKey;
+    if (
+      conversation &&
+      current &&
+      conversation.itemKey === current.key &&
+      conversation.libraryID === undefined
+    ) {
+      conversation.libraryID = current.libraryID;
+      this.chatManager.scheduleSave();
+    }
+    const title = ctx.body.querySelector(
+      ".zoteroai-conversation-title",
+    ) as HTMLElement;
+    title.textContent = conversation?.title || getString("panel-title");
+    title.title = title.textContent;
+    const itemTitle =
+      conversation?.itemTitle || this.contextProvider.getItemTitle(current);
     const badge = ctx.body.querySelector(
       ".zoteroai-context-badge",
-    ) as HTMLElement;
-    if (badge) {
-      badge.textContent = this.contextProvider.getItemTitle(item);
-      badge.title = this.contextProvider.getItemTitle(item);
+    ) as HTMLButtonElement;
+    badge.textContent = itemTitle || getString("context-none");
+    badge.title = itemTitle || getString("context-none");
+    badge.dataset.empty = itemTitle ? "false" : "true";
+    const mismatch = !!(
+      conversation?.itemKey &&
+      current?.key &&
+      conversation.itemKey !== current.key
+    );
+    const useCurrent = ctx.body.querySelector(
+      ".zoteroai-use-current",
+    ) as HTMLButtonElement;
+    useCurrent.hidden = !mismatch;
+    const fullText = ctx.body.querySelector(
+      ".zoteroai-ctx-fulltext",
+    ) as HTMLInputElement;
+    if (fullText) {
+      fullText.checked = !!getPref("includeFullText");
+      (fullText.parentElement as HTMLElement).dataset.checked = String(
+        fullText.checked,
+      );
     }
   }
 
-  /** Start a fresh conversation bound to the current item. */
-  private startNewConversation(ctx: PanelContext) {
-    const item = this.contextProvider.getCurrentItem();
-    const conv = this.chatManager.createConversation(
-      item
-        ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
-        : undefined,
-    );
-    ctx.convID = conv.id;
+  private openHistory(ctx: PanelContext, trigger: HTMLElement) {
+    ctx.drawerReturnFocus = trigger;
+    ctx.body.classList.add("zoteroai-history-open");
+    const drawer = ctx.body.querySelector(
+      ".zoteroai-history-drawer",
+    ) as HTMLElement;
+    drawer.setAttribute("aria-hidden", "false");
     this.renderHistory(ctx);
-    this.renderMessages(ctx);
+    (
+      drawer.querySelector(".zoteroai-history-search") as HTMLInputElement
+    )?.focus();
   }
 
-  /** Switch the panel to a conversation. */
+  private closeHistory(ctx: PanelContext) {
+    ctx.body.classList.remove("zoteroai-history-open");
+    const drawer = ctx.body.querySelector(
+      ".zoteroai-history-drawer",
+    ) as HTMLElement;
+    drawer.setAttribute("aria-hidden", "true");
+    ctx.drawerReturnFocus?.focus();
+  }
+
+  private trapDrawerFocus(ctx: PanelContext, event: KeyboardEvent) {
+    const drawer = ctx.body.querySelector(
+      ".zoteroai-history-drawer",
+    ) as HTMLElement;
+    const controls = [...drawer.querySelectorAll("button,input")].filter(
+      (element) => !(element as HTMLButtonElement).disabled,
+    ) as HTMLElement[];
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && ctx.doc.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && ctx.doc.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  private startNewConversation(ctx: PanelContext) {
+    const item = this.contextProvider.getCurrentItem();
+    const conversation = this.chatManager.createConversation(
+      item
+        ? {
+            libraryID: item.libraryID,
+            key: item.key,
+            title: this.contextProvider.getItemTitle(item),
+          }
+        : undefined,
+    );
+    ctx.convID = conversation.id;
+    this.renderEveryPanel();
+    void this.refreshContext(ctx);
+    (ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement)?.focus();
+  }
+
   private switchConversation(ctx: PanelContext, id: string) {
     this.chatManager.setActive(id);
     ctx.convID = id;
-    this.renderHistory(ctx);
-    this.renderMessages(ctx);
+    this.renderEveryPanel();
+    void this.refreshContext(ctx);
   }
 
-  /**
-   * Render the history popover: a "发起新对话" action on top, then the
-   * recent list for the current filter view, each row with rename/delete
-   * actions (Gemini sidenav pattern).
-   */
   private renderHistory(ctx: PanelContext) {
-    const { body, doc } = ctx;
-    const pop = body.querySelector(".zoteroai-history-popover") as HTMLElement;
-    const list = body.querySelector(".zoteroai-history-list") as HTMLElement;
-    const newBtn = body.querySelector(".zoteroai-history-new") as HTMLElement;
-    if (!pop || !list || !newBtn) {
-      return;
-    }
-    const fullTextCheckbox = body.querySelector(
-      ".zoteroai-ctx-fulltext",
-    ) as HTMLInputElement;
-    if (fullTextCheckbox) {
-      fullTextCheckbox.checked = !!getPref("includeFullText");
-    }
-    const active = this.chatManager.active;
-    ctx.convID = active?.id || null;
-
-    newBtn.onclick = () => {
-      this.startNewConversation(ctx);
-      body.classList.remove("zoteroai-history-open");
-    };
-
+    const list = ctx.body.querySelector(
+      ".zoteroai-history-list",
+    ) as HTMLElement;
+    if (!list) return;
+    ctx.body
+      .querySelectorAll(".zoteroai-history-filter")
+      .forEach((button: Element) => {
+        const active = (button as HTMLElement).dataset.filter === ctx.filter;
+        button.classList.toggle("zoteroai-active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    const itemFilter = ctx.filter === "item" ? ctx.currentItemKey : null;
+    const query =
+      (ctx.body.querySelector(".zoteroai-history-search") as HTMLInputElement)
+        ?.value || "";
+    const conversations = this.chatManager.search(query, itemFilter);
     list.innerHTML = "";
-    const conversations = this.chatManager.listFor(ctx.filterKey);
     if (!conversations.length) {
       list.appendChild(
         this.el(
-          doc,
+          ctx.doc,
           "div",
           "zoteroai-history-empty",
-          getString("history-empty"),
+          getString(query ? "history-no-results" : "history-empty"),
         ),
       );
       return;
     }
-    for (const conv of conversations) {
-      const row = this.el(doc, "div", "zoteroai-history-item");
-      if (conv.id === active?.id) {
-        row.classList.add("zoteroai-active");
+    let previousGroup = "";
+    for (const conversation of conversations) {
+      const group = this.historyGroup(conversation.updatedAt);
+      if (group !== previousGroup) {
+        list.appendChild(
+          this.el(ctx.doc, "div", "zoteroai-history-group", group),
+        );
+        previousGroup = group;
       }
-      const title = this.el(
-        doc,
+      list.appendChild(this.createHistoryRow(ctx, conversation));
+    }
+  }
+
+  private historyGroup(time: number): string {
+    const days = Math.floor((Date.now() - time) / 86400000);
+    if (days < 1) return getString("history-today");
+    if (days < 7) return getString("history-week");
+    return getString("history-older");
+  }
+
+  private createHistoryRow(
+    ctx: PanelContext,
+    conversation: Conversation,
+  ): HTMLElement {
+    const row = this.el(ctx.doc, "div", "zoteroai-history-item");
+    row.classList.toggle(
+      "zoteroai-active",
+      conversation.id === this.chatManager.active?.id,
+    );
+    const main = this.el(ctx.doc, "button", "zoteroai-history-main");
+    main.appendChild(
+      this.el(
+        ctx.doc,
         "span",
         "zoteroai-history-item-title",
-        conv.title,
+        conversation.title,
+      ),
+    );
+    if (conversation.itemTitle) {
+      main.appendChild(
+        this.el(
+          ctx.doc,
+          "span",
+          "zoteroai-history-item-paper",
+          conversation.itemTitle,
+        ),
       );
-      title.title = conv.title;
-      title.addEventListener("click", () => {
-        this.switchConversation(ctx, conv.id);
-        body.classList.remove("zoteroai-history-open");
-      });
-      const actions = this.el(doc, "div", "zoteroai-history-item-actions");
-      const renameBtn = this.el(doc, "button", "zoteroai-history-act", "✎");
-      renameBtn.title = getString("history-rename");
-      const delBtn = this.el(doc, "button", "zoteroai-history-act", "🗑");
-      delBtn.title = getString("tooltip-delete");
-      actions.appendChild(renameBtn);
-      actions.appendChild(delBtn);
-      row.appendChild(title);
-      row.appendChild(actions);
-      list.appendChild(row);
-
-      renameBtn.addEventListener("click", (e: any) => {
-        e.stopPropagation();
-        // Inline rename: swap the title span for an input
-        const input = this.el(
-          doc,
-          "input",
-          "zoteroai-history-rename",
-        ) as HTMLInputElement;
-        input.value = conv.title;
-        row.replaceChild(input, title);
-        input.focus();
-        input.select();
-        const commit = () => {
-          const v = input.value.trim();
-          if (v && v !== conv.title) {
-            this.chatManager.renameConversation(conv.id, v);
-          }
-          this.renderHistory(ctx);
-        };
-        input.addEventListener("keydown", (ev: any) => {
-          if (ev.key === "Enter") {
-            commit();
-          } else if (ev.key === "Escape") {
-            this.renderHistory(ctx);
-          }
-        });
-        input.addEventListener("blur", commit);
-      });
-      delBtn.addEventListener("click", (e: any) => {
-        e.stopPropagation();
-        this.chatManager.deleteConversation(conv.id);
-        if (ctx.convID === conv.id) {
-          ctx.convID = this.chatManager.active?.id || null;
-          this.renderMessages(ctx);
-        }
-        this.renderHistory(ctx);
-      });
     }
+    main.addEventListener("click", () => {
+      this.switchConversation(ctx, conversation.id);
+      this.closeHistory(ctx);
+    });
+    row.appendChild(main);
+    const actions = this.el(ctx.doc, "div", "zoteroai-history-item-actions");
+    const rename = this.iconButton(
+      ctx.doc,
+      "",
+      "edit",
+      getString("history-rename"),
+    );
+    const remove = this.iconButton(
+      ctx.doc,
+      "",
+      "trash",
+      getString("tooltip-delete"),
+    );
+    rename.addEventListener("click", () =>
+      this.beginRename(ctx, row, main, conversation),
+    );
+    remove.addEventListener("click", () =>
+      this.deleteWithUndo(ctx, conversation.id),
+    );
+    actions.appendChild(rename);
+    actions.appendChild(remove);
+    row.appendChild(actions);
+    return row;
+  }
+
+  private beginRename(
+    ctx: PanelContext,
+    row: HTMLElement,
+    main: HTMLElement,
+    conversation: Conversation,
+  ) {
+    const input = this.el(
+      ctx.doc,
+      "input",
+      "zoteroai-history-rename",
+    ) as HTMLInputElement;
+    input.value = conversation.title;
+    row.replaceChild(input, main);
+    input.focus();
+    input.select();
+    let completed = false;
+    const finish = (commit: boolean) => {
+      if (completed) return;
+      completed = true;
+      if (commit && input.value.trim())
+        this.chatManager.renameConversation(conversation.id, input.value);
+      this.renderEveryPanel();
+    };
+    input.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key === "Enter") finish(true);
+      else if (event.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  private deleteWithUndo(ctx: PanelContext, id: string) {
+    const deleted = this.chatManager.stageDeleteConversation(id);
+    if (!deleted) return;
+    this.renderEveryPanel();
+    this.showSnackbar(
+      ctx,
+      getString("history-deleted"),
+      getString("history-undo"),
+      () => {
+        this.chatManager.undoDeleteConversation(id);
+        this.renderEveryPanel();
+      },
+    );
+  }
+
+  private showSnackbar(
+    ctx: PanelContext,
+    message: string,
+    action?: string,
+    callback?: () => void,
+  ) {
+    const bar = ctx.body.querySelector(".zoteroai-snackbar") as HTMLElement;
+    bar.innerHTML = "";
+    bar.appendChild(this.el(ctx.doc, "span", undefined, message));
+    if (action && callback) {
+      const button = this.el(ctx.doc, "button", undefined, action);
+      button.addEventListener("click", () => {
+        callback();
+        bar.classList.remove("zoteroai-visible");
+      });
+      bar.appendChild(button);
+    }
+    bar.classList.add("zoteroai-visible");
+    setTimeout(() => bar.classList.remove("zoteroai-visible"), 6000);
   }
 
   private renderQuickPrompts(ctx: PanelContext) {
-    const container = ctx.body.querySelector(".zoteroai-quick-prompts");
-    if (!container) {
-      return;
-    }
+    const container = ctx.body.querySelector(
+      ".zoteroai-quick-prompts",
+    ) as HTMLElement;
+    if (!container) return;
     container.innerHTML = "";
-    for (const qp of getQuickPrompts()) {
-      const btn = this.el(ctx.doc, "button", "zoteroai-quick-btn", qp.label);
-      btn.addEventListener("click", () => {
-        if (qp.forSelection) {
-          void this.sendSelectionPrompt(ctx, qp.prompt);
-        } else {
+    for (const quickPrompt of getQuickPrompts()) {
+      const button = this.el(
+        ctx.doc,
+        "button",
+        "zoteroai-quick-btn",
+        quickPrompt.label,
+      );
+      button.addEventListener("click", () => {
+        if (quickPrompt.forSelection)
+          void this.sendSelectionPrompt(ctx, quickPrompt.prompt);
+        else {
           const input = ctx.body.querySelector(
             ".zoteroai-input",
           ) as HTMLTextAreaElement;
-          input.value = qp.prompt;
+          input.value = quickPrompt.prompt;
+          input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
           void this.send(ctx);
         }
       });
-      container.appendChild(btn);
+      container.appendChild(button);
     }
-    const insertBtn = this.el(
-      ctx.doc,
-      "button",
-      "zoteroai-quick-btn",
-      getString("panel-insert-selection"),
-    );
-    insertBtn.addEventListener("click", () => {
-      const input = ctx.body.querySelector(
-        ".zoteroai-input",
-      ) as HTMLTextAreaElement;
-      const selection = this.getSelection();
-      if (selection && input) {
-        input.value = input.value
-          ? `${input.value}\n\n${selection}`
-          : selection;
-        input.style.height = "auto";
-        input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
-        this.syncEmptyState(ctx);
-      }
-    });
-    container.appendChild(insertBtn);
   }
 
   private renderMessages(ctx: PanelContext) {
-    const container = ctx.body.querySelector(".zoteroai-messages");
-    if (!container) {
-      return;
-    }
+    const container = ctx.body.querySelector(
+      ".zoteroai-messages",
+    ) as HTMLElement;
+    if (!container) return;
     container.innerHTML = "";
-    const conv = this.chatManager.active;
-    if (!conv || !conv.messages.length) {
-      // Gemini-style zero state: large centered greeting
-      const item = this.contextProvider.getCurrentItem();
-      const title = item ? this.contextProvider.getItemTitle(item) : "";
+    const conversation = this.chatManager.active;
+    if (!conversation || !conversation.messages.length) {
       const wrap = this.el(ctx.doc, "div", "zoteroai-empty-state");
-      const icon = this.el(ctx.doc, "div", "zoteroai-empty-icon", "✦");
-      const greeting = this.el(
-        ctx.doc,
-        "div",
-        "zoteroai-empty-greeting",
-        getString("panel-empty-hint"),
+      wrap.appendChild(this.el(ctx.doc, "div", "zoteroai-empty-icon", "✦"));
+      wrap.appendChild(
+        this.el(
+          ctx.doc,
+          "div",
+          "zoteroai-empty-greeting",
+          getString("panel-empty-hint"),
+        ),
       );
-      wrap.appendChild(icon);
-      wrap.appendChild(greeting);
-      if (title) {
+      const title =
+        conversation?.itemTitle ||
+        this.contextProvider.getItemTitle(
+          this.contextProvider.getCurrentItem(),
+        );
+      if (title)
         wrap.appendChild(
           this.el(ctx.doc, "div", "zoteroai-empty-title", title),
         );
-      }
       container.appendChild(wrap);
-      return;
+    } else {
+      conversation.messages.forEach((message, index) => {
+        container.appendChild(
+          this.createMessageElement(ctx, conversation, message, index),
+        );
+      });
     }
-    for (const msg of conv.messages) {
-      container.appendChild(
-        this.createMessageElement(ctx, msg.role, msg.content),
-      );
-    }
+    if (conversation?.lastError)
+      container.appendChild(this.createErrorCard(ctx, conversation));
+    const generation = this.generation;
+    if (generation && generation.convID === conversation?.id)
+      this.appendPending(ctx, generation.phase);
     container.scrollTop = container.scrollHeight;
+    this.updateScrollButton(ctx);
   }
 
   private createMessageElement(
     ctx: PanelContext,
-    role: ChatMessage["role"] | "error",
-    content: string,
+    conversation: Conversation,
+    message: ConversationMessage,
+    index: number,
   ): HTMLElement {
-    const el = this.el(ctx.doc, "div", `zoteroai-msg zoteroai-msg-${role}`);
-    if (role === "user" || role === "error") {
-      el.textContent = content;
-      return el;
-    }
-    // Assistant messages: markdown body + a footer actions row (Gemini puts
-    // copy under the response, never floating over the text)
-    const rendered = this.el(ctx.doc, "div");
-    rendered.dataset.role = "zoteroai-markdown";
-    this.renderMarkdown(ctx, rendered, content);
-    el.appendChild(rendered);
-    if (content) {
-      const footer = this.el(ctx.doc, "div", "zoteroai-msg-footer");
-      const copyBtn = this.el(
+    const element = this.el(
+      ctx.doc,
+      "article",
+      `zoteroai-msg zoteroai-msg-${message.role}`,
+    );
+    element.dataset.messageId = message.id;
+    const content = this.el(ctx.doc, "div", "zoteroai-msg-content");
+    if (message.role === "assistant")
+      this.renderMarkdown(ctx, content, message.content);
+    else content.textContent = message.content;
+    element.appendChild(content);
+    const footer = this.el(ctx.doc, "div", "zoteroai-msg-footer");
+    if (message.role === "user") {
+      const edit = this.iconButton(
         ctx.doc,
-        "button",
-        "zoteroai-copy",
+        "",
+        "edit",
+        getString("message-edit"),
+      );
+      edit.addEventListener("click", () =>
+        this.beginMessageEdit(ctx, conversation, message, element, index),
+      );
+      footer.appendChild(edit);
+    } else {
+      const copy = this.iconButton(
+        ctx.doc,
+        "",
+        "copy",
         getString("panel-copy"),
       );
-      copyBtn.addEventListener("click", () => {
-        const win = ctx.doc.defaultView as any;
-        if (win?.Zotero?.Utilities?.Internal?.copyTextToClipboard) {
-          win.Zotero.Utilities.Internal.copyTextToClipboard(content);
-        } else {
-          Zotero.Utilities.Internal.copyTextToClipboard(content);
-        }
-      });
-      footer.appendChild(copyBtn);
-      el.appendChild(footer);
+      copy.addEventListener("click", () =>
+        this.copyMessage(ctx, message.content, copy),
+      );
+      footer.appendChild(copy);
+      if (index === conversation.messages.length - 1) {
+        const retry = this.iconButton(
+          ctx.doc,
+          "",
+          "retry",
+          getString("message-regenerate"),
+        );
+        retry.addEventListener("click", () => {
+          if (
+            this.chatManager.truncateFromMessage(conversation.id, message.id)
+          ) {
+            this.renderEveryPanel();
+            void this.runGeneration(ctx, conversation.id);
+          }
+        });
+        footer.appendChild(retry);
+      }
     }
-    return el;
+    element.appendChild(footer);
+    return element;
   }
 
-  /** Minimal, dependency-free markdown rendering (escaped HTML + basics). */
-  private renderMarkdown(ctx: PanelContext, el: HTMLElement, text: string) {
-    el.innerHTML = "";
-    // Escape HTML first to prevent injection from model output
+  private beginMessageEdit(
+    ctx: PanelContext,
+    conversation: Conversation,
+    message: ConversationMessage,
+    element: HTMLElement,
+    index: number,
+  ) {
+    element.innerHTML = "";
+    element.classList.add("zoteroai-editing");
+    const editor = this.el(
+      ctx.doc,
+      "textarea",
+      "zoteroai-message-editor",
+    ) as HTMLTextAreaElement;
+    editor.value = message.content;
+    element.appendChild(editor);
+    if (index < conversation.messages.length - 1) {
+      element.appendChild(
+        this.el(
+          ctx.doc,
+          "div",
+          "zoteroai-edit-warning",
+          getString("message-edit-warning"),
+        ),
+      );
+    }
+    const actions = this.el(ctx.doc, "div", "zoteroai-edit-actions");
+    const cancel = this.el(
+      ctx.doc,
+      "button",
+      undefined,
+      getString("action-cancel"),
+    );
+    const submit = this.el(
+      ctx.doc,
+      "button",
+      "zoteroai-primary-action",
+      getString("message-resend"),
+    );
+    cancel.addEventListener("click", () => this.renderMessages(ctx));
+    submit.addEventListener("click", () => {
+      if (
+        this.chatManager.editAndTruncate(
+          conversation.id,
+          message.id,
+          editor.value,
+        )
+      ) {
+        this.renderEveryPanel();
+        void this.runGeneration(ctx, conversation.id);
+      }
+    });
+    actions.appendChild(cancel);
+    actions.appendChild(submit);
+    element.appendChild(actions);
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+  }
+
+  private copyMessage(
+    ctx: PanelContext,
+    content: string,
+    button: HTMLButtonElement,
+  ) {
+    const win = ctx.doc.defaultView as any;
+    const utility =
+      win?.Zotero?.Utilities?.Internal || Zotero.Utilities.Internal;
+    utility.copyTextToClipboard(content);
+    const live = ctx.body.querySelector(".zoteroai-live-region") as HTMLElement;
+    live.textContent = getString("message-copied");
+    button.classList.add("zoteroai-success");
+    button.title = getString("message-copied");
+    setTimeout(() => {
+      button.classList.remove("zoteroai-success");
+      button.title = getString("panel-copy");
+      live.textContent = "";
+    }, 1500);
+  }
+
+  private createErrorCard(
+    ctx: PanelContext,
+    conversation: Conversation,
+  ): HTMLElement {
+    const card = this.el(ctx.doc, "div", "zoteroai-error-card");
+    card.appendChild(
+      this.el(ctx.doc, "strong", undefined, getString("error-title")),
+    );
+    const details = this.el(ctx.doc, "details");
+    details.appendChild(
+      this.el(ctx.doc, "summary", undefined, getString("error-details")),
+    );
+    details.appendChild(
+      this.el(ctx.doc, "pre", undefined, conversation.lastError),
+    );
+    card.appendChild(details);
+    const retry = this.el(
+      ctx.doc,
+      "button",
+      undefined,
+      getString("error-retry"),
+    );
+    retry.addEventListener("click", () => {
+      this.chatManager.setError(conversation.id);
+      this.renderEveryPanel();
+      void this.runGeneration(ctx, conversation.id);
+    });
+    card.appendChild(retry);
+    return card;
+  }
+
+  private appendPending(ctx: PanelContext, phase: GenerationPhase) {
+    const container = ctx.body.querySelector(
+      ".zoteroai-messages",
+    ) as HTMLElement;
+    if (container.querySelector(".zoteroai-pending")) return;
+    const pending = this.el(ctx.doc, "div", "zoteroai-pending");
+    pending.appendChild(this.el(ctx.doc, "span", "zoteroai-spinner"));
+    pending.appendChild(
+      this.el(ctx.doc, "span", undefined, getString(`status-${phase}` as any)),
+    );
+    container.appendChild(pending);
+  }
+
+  private renderMarkdown(
+    ctx: PanelContext,
+    element: HTMLElement,
+    text: string,
+  ) {
     const escaped = text
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
     const html = escaped
-      // fenced code blocks
       .replace(
         /```(\w*)\n([\s\S]*?)```/g,
-        (_m, lang, code) => `<pre><code>${code}</code></pre>`,
+        (_match, _lang, code) => `<pre><code>${code}</code></pre>`,
       )
-      // inline code
       .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      // headings
       .replace(/^### (.*)$/gm, "<h4>$1</h4>")
       .replace(/^## (.*)$/gm, "<h3>$1</h3>")
       .replace(/^# (.*)$/gm, "<h2>$1</h2>")
-      // bold / italic
-      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-      .replace(/\*([^*\n]+)\*/g, "<i>$1</i>")
-      // links
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
       .replace(
         /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
         '<a href="$2" target="_blank">$1</a>',
       )
-      // unordered lists
-      .replace(/^(?:[-*] (.*)\n?)+/gm, (block: string) => {
-        const items = block
-          .trim()
-          .split("\n")
-          .map((line) => `<li>${line.replace(/^[-*] /, "")}</li>`)
-          .join("");
-        return `<ul>${items}</ul>`;
-      })
-      // paragraphs
-      .replace(/^(?!<[huplo])(.+)$/gm, "<p>$1</p>");
-    const frag = ctx.doc.createRange().createContextualFragment(html);
-    el.appendChild(frag);
-    // Wrap up: any leftover stray text nodes outside block elements (e.g.
-    // between the copy button wrapper and parsed blocks) get normalized
-    el.normalize();
+      .replace(
+        /(^\|.+\|\n^\|(?:\s*:?-+:?\s*\|)+\n(?:^\|.+\|\n?)+)/gm,
+        (table: string) => {
+          const rows = table
+            .trim()
+            .split("\n")
+            .map((line) =>
+              line
+                .slice(1, -1)
+                .split("|")
+                .map((cell) => cell.trim()),
+            );
+          const header = rows[0].map((cell) => `<th>${cell}</th>`).join("");
+          const body = rows
+            .slice(2)
+            .map(
+              (row) =>
+                `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`,
+            )
+            .join("");
+          return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+        },
+      )
+      .replace(
+        /^(?:[-*] (.*)\n?)+/gm,
+        (block: string) =>
+          `<ul>${block
+            .trim()
+            .split("\n")
+            .map((line) => `<li>${line.replace(/^[-*] /, "")}</li>`)
+            .join("")}</ul>`,
+      )
+      .replace(/^(?!<[thuplo])(.+)$/gm, "<p>$1</p>");
+    element.innerHTML = "";
+    element.appendChild(ctx.doc.createRange().createContextualFragment(html));
   }
 
-  /** Selected text in the active reader, if any. */
+  private async send(ctx: PanelContext) {
+    if (this.sending || this.generation || ctx.meterBlocked) return;
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    const content = input.value.trim();
+    if (!content) return;
+    let conversation = this.chatManager.active;
+    if (!conversation) {
+      this.startNewConversation(ctx);
+      conversation = this.chatManager.active;
+    }
+    if (!conversation) return;
+    this.chatManager.appendMessages(conversation.id, [
+      { role: "user", content },
+    ]);
+    input.value = "";
+    input.style.height = "auto";
+    this.renderEveryPanel();
+    await this.runGeneration(ctx, conversation.id);
+  }
+
+  private async runGeneration(ctx: PanelContext, convID: string) {
+    if (this.sending || this.generation) return;
+    this.sending = true;
+    this.generation = { convID, phase: "preparing", cancelled: false };
+    this.chatManager.setError(convID);
+    this.renderEveryPanel();
+    try {
+      const conversation = this.chatManager.list.find(
+        (entry) => entry.id === convID,
+      );
+      if (!conversation) return;
+      const itemContext = await this.getConversationContext(conversation);
+      if (!this.generation || this.generation.cancelled) return;
+      const system = this.buildSystemPrompt(itemContext);
+      const history: ChatMessage[] = [
+        { role: "system", content: system },
+        ...this.chatManager.toAPIMessages(convID),
+      ];
+      const usage = estimateContextUsage(
+        history,
+        Number(getPref("contextWindowTokens")) || 128000,
+        Math.max(0, Number(getPref("maxTokens")) || 0),
+      );
+      if (usage.percent >= 100) {
+        this.chatManager.setError(convID, getString("context-limit-error"));
+        return;
+      }
+      this.generation.phase = "waiting";
+      this.renderEveryPanel();
+      let streamed = "";
+      let reasoning = "";
+      let responseElement: HTMLElement | null = null;
+      let reasoningElement: HTMLElement | null = null;
+      const container = ctx.body.querySelector(
+        ".zoteroai-messages",
+      ) as HTMLElement;
+      await this.apiClient.chatStream(history, {
+        onDelta: (delta) => {
+          if (!this.generation || this.generation.convID !== convID) return;
+          this.generation.phase = "streaming";
+          streamed += delta;
+          container.querySelector(".zoteroai-pending")?.remove();
+          reasoningElement?.remove();
+          reasoningElement = null;
+          if (!responseElement) {
+            responseElement = this.el(
+              ctx.doc,
+              "article",
+              "zoteroai-msg zoteroai-msg-assistant zoteroai-streaming",
+            );
+            responseElement.appendChild(
+              this.el(ctx.doc, "div", "zoteroai-msg-content"),
+            );
+            container.appendChild(responseElement);
+          }
+          const body = responseElement.querySelector(
+            ".zoteroai-msg-content",
+          ) as HTMLElement;
+          this.renderMarkdown(ctx, body, streamed);
+          if (this.isNearBottom(container))
+            container.scrollTop = container.scrollHeight;
+          this.setGeneratingUI(ctx);
+        },
+        onReasoning: (delta) => {
+          reasoning += delta;
+          container.querySelector(".zoteroai-pending")?.remove();
+          if (!reasoningElement) {
+            reasoningElement = this.el(
+              ctx.doc,
+              "div",
+              "zoteroai-msg-reasoning",
+            );
+            container.appendChild(reasoningElement);
+          }
+          reasoningElement.textContent = reasoning;
+        },
+        onDone: () => {
+          this.chatManager.setLastAssistant(convID, streamed);
+        },
+        onError: (message) => {
+          if (streamed) this.chatManager.setLastAssistant(convID, streamed);
+          this.chatManager.setError(convID, message);
+        },
+      });
+    } finally {
+      this.generation = null;
+      this.sending = false;
+      this.renderEveryPanel();
+      for (const panel of this.panels.values()) void this.refreshContext(panel);
+    }
+  }
+
+  private stopGeneration() {
+    if (!this.generation) return;
+    this.generation.cancelled = true;
+    this.apiClient.stop();
+    if (!this.apiClient.generating) {
+      this.generation = null;
+      this.sending = false;
+      this.renderEveryPanel();
+    }
+  }
+
+  private setGeneratingUI(ctx: PanelContext) {
+    const button = ctx.body.querySelector(
+      ".zoteroai-btn-action",
+    ) as HTMLButtonElement;
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    if (!button || !input) return;
+    const generating = !!this.generation;
+    button.classList.toggle("zoteroai-mode-send", !generating);
+    button.classList.toggle("zoteroai-mode-stop", generating);
+    button.innerHTML = "";
+    button.appendChild(this.icon(ctx.doc, generating ? "stop" : "send"));
+    button.title = getString(generating ? "panel-stop" : "panel-send");
+    button.setAttribute("aria-label", button.title);
+    button.disabled = !generating && (!input.value.trim() || ctx.meterBlocked);
+    input.disabled = !!(
+      generating && this.generation?.convID !== this.chatManager.active?.id
+    );
+  }
+
+  private async refreshContext(ctx: PanelContext) {
+    const version = ++ctx.contextVersion;
+    ctx.contextLoading = true;
+    this.updateContextMeter(ctx);
+    const context = await this.getConversationContext(this.chatManager.active);
+    if (version !== ctx.contextVersion) return;
+    ctx.contextPrompt = this.buildSystemPrompt(context);
+    ctx.contextLoading = false;
+    this.updateContextMeter(ctx);
+  }
+
+  private async getConversationContext(
+    conversation?: Conversation,
+  ): Promise<ItemContext | null> {
+    const item = conversation?.itemKey
+      ? await this.contextProvider.resolveItem(
+          conversation.libraryID,
+          conversation.itemKey,
+        )
+      : this.contextProvider.getCurrentItem();
+    if (!item) return null;
+    const key = `${item.libraryID}:${item.key}:${getPref("includeFullText")}:${getPref("fullTextLimit")}`;
+    let pending = this.contextCache.get(key);
+    if (!pending) {
+      pending = this.contextProvider.buildContext(item).catch((error) => {
+        ztoolkit.log("Zotero AI: buildContext failed", error);
+        return null;
+      });
+      this.contextCache.set(key, pending);
+    }
+    return pending;
+  }
+
+  private updateContextMeter(ctx: PanelContext) {
+    const conversation = this.chatManager.active;
+    const draft = (
+      ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement
+    )?.value.trim();
+    const messages: ChatMessage[] = [
+      { role: "system", content: ctx.contextPrompt },
+      ...(conversation ? this.chatManager.toAPIMessages(conversation.id) : []),
+      ...(draft ? [{ role: "user" as const, content: draft }] : []),
+    ];
+    const usage = estimateContextUsage(
+      messages,
+      Number(getPref("contextWindowTokens")) || 128000,
+      Math.max(0, Number(getPref("maxTokens")) || 0),
+    );
+    const meter = ctx.body.querySelector(
+      ".zoteroai-context-meter",
+    ) as HTMLElement;
+    const track = meter?.querySelector(
+      ".zoteroai-context-track",
+    ) as HTMLElement;
+    const fill = meter?.querySelector(".zoteroai-context-fill") as HTMLElement;
+    const label = meter?.querySelector(
+      ".zoteroai-context-meter-label",
+    ) as HTMLElement;
+    if (!meter || !track || !fill || !label) return;
+    ctx.meterBlocked = usage.percent >= 100;
+    meter.dataset.level =
+      usage.percent >= 90
+        ? "danger"
+        : usage.percent >= 75
+          ? "warning"
+          : "normal";
+    fill.style.width = `${usage.percent}%`;
+    track.setAttribute("aria-valuenow", String(Math.round(usage.percent)));
+    label.textContent = ctx.contextLoading
+      ? getString("context-calculating")
+      : `≈ ${Math.round(usage.percent)}% · ${getString("context-remaining")} ${this.formatTokens(usage.remaining)}`;
+    meter.title = `${getString("context-used")} ${this.formatTokens(usage.used)} / ${this.formatTokens(usage.limit)}${usage.reserved ? ` · ${getString("context-reserved")} ${this.formatTokens(usage.reserved)}` : ""}`;
+    this.setGeneratingUI(ctx);
+  }
+
+  private formatTokens(value: number): string {
+    if (value >= 1000)
+      return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}K`;
+    return String(value);
+  }
+
+  private buildSystemPrompt(context: ItemContext | null): string {
+    let prompt =
+      getPref("systemPrompt") ||
+      "You are a research assistant embedded in Zotero, a reference manager. Answer accurately and concisely; use Markdown formatting.";
+    if (!context) return prompt;
+    const parts = [
+      `The user is currently viewing this paper:\nTitle: ${context.title}`,
+      context.meta,
+      context.fullText
+        ? `Full text (may be truncated):\n"""\n${context.fullText}\n"""`
+        : "",
+    ].filter(Boolean);
+    prompt += `\n\n${parts.join("\n\n")}`;
+    if (context.truncated)
+      prompt +=
+        "\n\nNote: the full text was truncated; say so if the answer may depend on the missing part.";
+    return prompt;
+  }
+
+  private insertSelection(ctx: PanelContext) {
+    const selection = this.getSelection();
+    if (!selection) {
+      this.showSnackbar(ctx, getString("panel-no-selection"));
+      return;
+    }
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    input.value = input.value ? `${input.value}\n\n${selection}` : selection;
+    input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
+    input.focus();
+  }
+
+  private async sendSelectionPrompt(ctx: PanelContext, template: string) {
+    const selection = this.getSelection();
+    if (!selection) {
+      this.showSnackbar(ctx, getString("panel-no-selection"));
+      return;
+    }
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    input.value = template.replace("$text", selection);
+    input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
+    await this.send(ctx);
+  }
+
   private getSelection(): string | null {
     try {
       const win = Zotero.getMainWindow();
       const reader = Zotero.Reader.getByTabID(
         (win as any).Zotero_Tabs.selectedID,
       );
-      if (!reader) {
-        return null;
-      }
-      const iframeWin = (reader as any)._internalReader?._primaryView
-        ?._iframeWindow;
-      const selection = iframeWin?.getSelection?.()?.toString();
+      const selection = (
+        reader as any
+      )?._internalReader?._primaryView?._iframeWindow
+        ?.getSelection?.()
+        ?.toString();
       return selection?.trim() || null;
     } catch (e) {
       ztoolkit.log("Zotero AI: getSelection failed", e);
@@ -631,324 +1338,27 @@ export class ChatPanel {
     }
   }
 
-  /** Morph the single action button between send and stop states. */
-  private setGeneratingUI(ctx: PanelContext, generating: boolean) {
-    const btn = ctx.body.querySelector(
-      ".zoteroai-btn-action",
-    ) as HTMLElement | null;
-    if (!btn) {
-      return;
-    }
-    btn.classList.toggle("zoteroai-mode-send", !generating);
-    btn.classList.toggle("zoteroai-mode-stop", generating);
-    btn.textContent = generating ? "■" : "➤";
-    btn.title = getString(generating ? "panel-stop" : "panel-send");
-    if (generating) {
-      btn.classList.remove("zoteroai-empty");
-    } else {
-      const input = ctx.body.querySelector(
-        ".zoteroai-input",
-      ) as HTMLTextAreaElement;
-      btn.classList.toggle("zoteroai-empty", !input?.value.trim());
-    }
+  private renderEveryPanel() {
+    for (const panel of this.panels.values()) this.renderAll(panel);
   }
 
-  private buildSystemPrompt(ctx: ItemContext | null): string {
-    const custom = getPref("systemPrompt");
-    let prompt =
-      custom ||
-      "You are a research assistant embedded in Zotero, a reference manager. Answer accurately and concisely; use Markdown formatting.";
-    if (ctx) {
-      const parts = [
-        `The user is currently viewing this paper:\nTitle: ${ctx.title}`,
-        ctx.meta,
-        ctx.fullText
-          ? `Full text (may be truncated):\n"""\n${ctx.fullText}\n"""`
-          : "",
-      ].filter(Boolean);
-      prompt += `\n\n${parts.join("\n\n")}`;
-      if (ctx.truncated) {
-        prompt +=
-          "\n\nNote: the full text was truncated; say so if the answer may depend on the missing part.";
-      }
-    }
-    return prompt;
+  private isNearBottom(container: HTMLElement): boolean {
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight < 72
+    );
   }
 
-  private async send(ctx: PanelContext) {
-    // Synchronous in-flight guard: chatStream only sets its AbortController
-    // after several awaits (full-text extraction can take seconds), so
-    // apiClient.generating alone leaves a multi-second double-send window.
-    if (this.sending || this.apiClient.generating) {
-      return;
-    }
-    this.sending = true;
-    try {
-      await this.sendInternal(ctx);
-    } finally {
-      this.sending = false;
-    }
-  }
-
-  private async sendInternal(ctx: PanelContext) {
-    const input = ctx.body.querySelector(
-      ".zoteroai-input",
-    ) as HTMLTextAreaElement;
-    const content = input?.value.trim();
-    if (!content) {
-      return;
-    }
-    // Ensure an active conversation exists
-    let conv = this.chatManager.active;
-    if (!conv) {
-      const item = this.contextProvider.getCurrentItem();
-      conv = this.chatManager.createConversation(
-        item
-          ? { key: item.key, title: this.contextProvider.getItemTitle(item) }
-          : undefined,
-      );
-      ctx.convID = conv.id;
-    }
-    const convID = conv.id;
-
-    const userMsg: ChatMessage = { role: "user", content };
-    this.chatManager.appendMessages(convID, [userMsg]);
-
-    // Build item context (metadata + optional full text)
-    const item = this.contextProvider.getCurrentItem();
-    let itemCtx: ItemContext | null = null;
-    if (item) {
-      try {
-        itemCtx = await this.contextProvider.buildContext(item);
-      } catch (e) {
-        ztoolkit.log("Zotero AI: buildContext failed", e);
-      }
-    }
-
+  private updateScrollButton(ctx: PanelContext) {
     const container = ctx.body.querySelector(
       ".zoteroai-messages",
-    ) as HTMLElement | null;
-    if (input) {
-      input.value = "";
-      input.style.height = "auto";
-      this.syncEmptyState(ctx);
-    }
-    if (container) {
-      container.querySelector(".zoteroai-thinking")?.remove();
-      const userEl = this.createMessageElement(ctx, "user", content);
-      container.appendChild(userEl);
-      const pending = this.el(
-        ctx.doc,
-        "div",
-        "zoteroai-msg zoteroai-msg-assistant",
+    ) as HTMLElement;
+    const button = ctx.body.querySelector(
+      ".zoteroai-scroll-bottom",
+    ) as HTMLButtonElement;
+    if (container && button)
+      button.classList.toggle(
+        "zoteroai-visible",
+        !this.isNearBottom(container),
       );
-      const dots = this.el(ctx.doc, "div", "zoteroai-thinking-dots");
-      for (let i = 0; i < 3; i++) {
-        dots.appendChild(this.el(ctx.doc, "span"));
-      }
-      pending.appendChild(dots);
-      container.appendChild(pending);
-      // Scroll just enough to bring the new message into view instead of
-      // jumping to the very bottom (which would push earlier content away)
-      userEl.scrollIntoView({ block: "end" });
-    }
-
-    // History for THIS conversation — not chatManager.active, which the user
-    // may have switched away from during the buildContext await
-    const convNow = this.chatManager.list.find((c) => c.id === convID);
-    if (!convNow) {
-      // Conversation was deleted mid-window
-      container
-        ?.querySelector(".zoteroai-thinking-dots")
-        ?.parentElement?.remove();
-      return;
-    }
-    this.setGeneratingUI(ctx, true);
-    const history: ChatMessage[] = [
-      { role: "system", content: this.buildSystemPrompt(itemCtx) },
-      ...convNow.messages.filter((m) => m.role !== "system"),
-    ];
-
-    let streamed = "";
-    let reasoning = "";
-    let el: HTMLElement | null = null;
-    let reasoningEl: HTMLElement | null = null;
-    let lastRender = 0;
-    let reasoningCollapsed = false;
-    // While streaming, only auto-follow when the user is already near the
-    // bottom; if they scrolled up to read, don't yank the view around
-    const nearBottom = () => {
-      if (!container) {
-        return false;
-      }
-      return (
-        container.scrollHeight - container.scrollTop - container.clientHeight <
-        60
-      );
-    };
-    // Collapse the reasoning block with a smooth transition as soon as the
-    // actual answer starts arriving (DeepSeek/Claude-style handoff)
-    const collapseReasoning = () => {
-      if (reasoningCollapsed || !reasoningEl) {
-        return;
-      }
-      reasoningCollapsed = true;
-      const block = reasoningEl;
-      block.style.maxHeight = `${block.scrollHeight}px`;
-      // Force a style flush so the transition starts from the open state
-      void (block as any).offsetHeight;
-      block.classList.add("zoteroai-collapsing");
-      setTimeout(() => {
-        block.remove();
-        if (reasoningEl === block) {
-          reasoningEl = null;
-        }
-      }, 320);
-    };
-    await this.apiClient.chatStream(history, {
-      onDelta: (delta) => {
-        streamed += delta;
-        const now = Date.now();
-        collapseReasoning();
-        if (!el && container) {
-          container.querySelector(".zoteroai-thinking")?.remove();
-          container
-            .querySelector(".zoteroai-thinking-dots")
-            ?.parentElement?.remove();
-          el = this.createMessageElement(ctx, "assistant", streamed);
-          el.classList.add("zoteroai-streaming");
-          container.appendChild(el);
-          lastRender = now;
-        } else if (el && now - lastRender >= 100) {
-          // Throttle markdown re-rendering during streaming. Skip DOM work
-          // entirely when the message element was detached (conversation
-          // switched / section re-rendered) — persistence still happens.
-          if (!el.isConnected) {
-            return;
-          }
-          lastRender = now;
-          const rendered = el.querySelector(
-            '[data-role="zoteroai-markdown"]',
-          ) as HTMLElement;
-          if (rendered) {
-            this.renderMarkdown(ctx, rendered, streamed);
-          }
-        }
-        if (container && el?.isConnected && nearBottom()) {
-          container.scrollTop = container.scrollHeight;
-        }
-      },
-      onReasoning: (delta) => {
-        reasoning += delta;
-        if (!container) {
-          return;
-        }
-        if (!reasoningEl) {
-          container.querySelector(".zoteroai-thinking")?.remove();
-          container
-            .querySelector(".zoteroai-thinking-dots")
-            ?.parentElement?.remove();
-          reasoningEl = this.el(
-            ctx.doc,
-            "div",
-            "zoteroai-msg zoteroai-msg-reasoning",
-          );
-          container.appendChild(reasoningEl);
-        }
-        // Reasoning deltas arrive fast; textContent update is cheap.
-        // Same detachment guard as onDelta.
-        if (!reasoningEl.isConnected) {
-          return;
-        }
-        reasoningEl.textContent = reasoning;
-        if (nearBottom()) {
-          container.scrollTop = container.scrollHeight;
-        }
-      },
-      onDone: () => {
-        this.setGeneratingUI(ctx, false);
-        el?.classList.remove("zoteroai-streaming");
-        // If the answer never arrived, collapse any leftover reasoning
-        if (!streamed) {
-          collapseReasoning();
-        }
-        // Persist the assistant reply (created/updated in the store here —
-        // during streaming the UI shows it but the store isn't touched)
-        this.chatManager.setLastAssistant(convID, streamed);
-        // Final full render — only when the element is still in the live
-        // document (a conversation switch detaches it; renderMessages will
-        // show the persisted copy on next render)
-        if (el && container && el.isConnected) {
-          const rendered = el.querySelector(
-            '[data-role="zoteroai-markdown"]',
-          ) as HTMLElement;
-          if (rendered) {
-            this.renderMarkdown(ctx, rendered, streamed);
-          }
-          if (nearBottom()) {
-            container.scrollTop = container.scrollHeight;
-          }
-        }
-      },
-      onError: (message) => {
-        this.setGeneratingUI(ctx, false);
-        el?.classList.remove("zoteroai-streaming");
-        container?.querySelector(".zoteroai-thinking")?.remove();
-        container
-          ?.querySelector(".zoteroai-thinking-dots")
-          ?.parentElement?.remove();
-        if (reasoningEl && !reasoningCollapsed) {
-          reasoningEl.remove();
-          reasoningEl = null;
-        }
-        // Keep partial output if the model already produced something;
-        // otherwise drop the pending placeholder from the store view
-        if (streamed) {
-          this.chatManager.setLastAssistant(convID, streamed);
-        }
-        // Surface the error in the live panel only if this conversation is
-        // still the one being viewed
-        if (container && this.chatManager.active?.id === convID) {
-          container.appendChild(
-            this.createMessageElement(ctx, "error", message),
-          );
-          container.scrollTop = container.scrollHeight;
-        }
-      },
-    });
-  }
-
-  /**
-   * Sync the send button's dimmed state after programmatic input.value
-   * writes (quick prompts, insert-selection) that bypass input events.
-   */
-  private syncEmptyState(ctx: PanelContext) {
-    const input = ctx.body.querySelector(
-      ".zoteroai-input",
-    ) as HTMLTextAreaElement;
-    const btn = ctx.body.querySelector(".zoteroai-btn-action");
-    btn?.classList.toggle("zoteroai-empty", !input?.value.trim());
-  }
-
-  private async sendSelectionPrompt(ctx: PanelContext, promptTemplate: string) {
-    const selection = this.getSelection();
-    const input = ctx.body.querySelector(
-      ".zoteroai-input",
-    ) as HTMLTextAreaElement;
-    if (!selection) {
-      const container = ctx.body.querySelector(".zoteroai-messages");
-      if (container) {
-        container.appendChild(
-          this.createMessageElement(
-            ctx,
-            "error",
-            getString("panel-no-selection"),
-          ),
-        );
-      }
-      return;
-    }
-    input.value = promptTemplate.replace("$text", selection);
-    await this.send(ctx);
   }
 }

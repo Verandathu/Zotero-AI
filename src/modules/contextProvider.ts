@@ -78,6 +78,35 @@ export class ContextProvider {
     return undefined;
   }
 
+  async resolveItem(
+    libraryID: number | undefined,
+    itemKey: string | undefined,
+  ): Promise<Zotero.Item | undefined> {
+    if (!itemKey) {
+      return undefined;
+    }
+    const current = this.getCurrentItem();
+    if (
+      current?.key === itemKey &&
+      (libraryID === undefined || current.libraryID === libraryID)
+    ) {
+      return current;
+    }
+    try {
+      if (libraryID !== undefined) {
+        return (
+          (await (Zotero.Items as any).getByLibraryAndKeyAsync?.(
+            libraryID,
+            itemKey,
+          )) || undefined
+        );
+      }
+    } catch (e) {
+      ztoolkit.log("Zotero AI: bound item lookup failed", e);
+    }
+    return undefined;
+  }
+
   /** Short display title for the context badge. */
   getItemTitle(item: Zotero.Item | undefined): string {
     if (!item) {
