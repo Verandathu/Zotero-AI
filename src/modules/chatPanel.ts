@@ -141,8 +141,17 @@ export class ChatPanel {
   /** Programmatically build the chat UI (works in XUL and HTML documents). */
   private buildUI(ctx: PanelContext) {
     const { body, doc } = ctx;
+
+    // --- Header: item badge row ---
+    const badgeRow = this.el(doc, "div", "zoteroai-badge-row");
+    const badge = this.el(doc, "div", "zoteroai-context-badge");
+    badgeRow.appendChild(badge);
+
+    // --- Header: conversation + toggles row ---
     const toolbar = this.el(doc, "div", "zoteroai-toolbar");
 
+    // Conversation switcher: native select for reliability, with adjacent
+    // rename/delete icon buttons sized properly (28px hit targets)
     const select = this.el(
       doc,
       "select",
@@ -151,7 +160,7 @@ export class ChatPanel {
     select.title = "Conversation";
     toolbar.appendChild(select);
 
-    const btnNew = this.el(doc, "button", "zoteroai-btn-new", "+");
+    const btnNew = this.el(doc, "button", "zoteroai-btn-new");
     btnNew.title = getString("tooltip-new");
     btnNew.textContent = "＋";
     toolbar.appendChild(btnNew);
@@ -161,7 +170,8 @@ export class ChatPanel {
     btnDel.textContent = "🗑";
     toolbar.appendChild(btnDel);
 
-    const followLabel = this.el(doc, "label", "zoteroai-mini-toggle");
+    // Follow / full-text as real toggle pills (checkbox visually hidden)
+    const followLabel = this.el(doc, "label", "zoteroai-toggle-pill");
     const follow = this.el(doc, "input") as HTMLInputElement;
     follow.type = "checkbox";
     follow.checked = true;
@@ -172,7 +182,7 @@ export class ChatPanel {
     );
     toolbar.appendChild(followLabel);
 
-    const fullTextLabel = this.el(doc, "label", "zoteroai-mini-toggle");
+    const fullTextLabel = this.el(doc, "label", "zoteroai-toggle-pill");
     const fullText = this.el(doc, "input") as HTMLInputElement;
     fullText.type = "checkbox";
     fullText.checked = !!getPref("includeFullText");
@@ -183,15 +193,14 @@ export class ChatPanel {
     );
     toolbar.appendChild(fullTextLabel);
 
-    const badge = this.el(doc, "div", "zoteroai-context-badge");
-    toolbar.appendChild(badge);
-
+    body.appendChild(badgeRow);
     body.appendChild(toolbar);
     body.appendChild(this.el(doc, "div", "zoteroai-messages"));
-    body.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
 
-    // Floating rounded input bar with a single send/stop toggle button
-    // (Gemini / DeepSeek style: one button morphs between the two states)
+    // Bottom composer: quick chips + rounded input bar (single row:
+    // textarea flexes, circular action button bottom-aligned, no overlap)
+    const composer = this.el(doc, "div", "zoteroai-composer");
+    composer.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
     const inputRow = this.el(doc, "div", "zoteroai-input-row");
     const input = this.el(
       doc,
@@ -209,12 +218,13 @@ export class ChatPanel {
     btnAction.title = getString("panel-send");
     btnAction.textContent = "➤";
     inputRow.appendChild(btnAction);
-    body.appendChild(inputRow);
+    composer.appendChild(inputRow);
+    body.appendChild(composer);
 
     // Auto-grow the textarea while typing; dim the send button while empty
     input.addEventListener("input", () => {
       input.style.height = "auto";
-      input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+      input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
       btnAction.classList.toggle("zoteroai-empty", !input.value.trim());
     });
   }
@@ -244,13 +254,32 @@ export class ChatPanel {
       this.renderMessages(ctx);
     });
 
+    // Delete asks for confirmation inline (double-click = confirm) since
+    // window.confirm is unavailable in the reader sandbox
+    let deleteArmed = 0;
     $(".zoteroai-btn-delete")?.addEventListener("click", () => {
-      if (ctx.convID) {
-        this.chatManager.deleteConversation(ctx.convID);
-        ctx.convID = this.chatManager.active?.id || null;
-        this.renderToolbar(ctx, this.contextProvider.getCurrentItem());
-        this.renderMessages(ctx);
+      const btn = ctx.body.querySelector(".zoteroai-btn-delete") as HTMLElement;
+      const now = Date.now();
+      if (!ctx.convID) {
+        return;
       }
+      if (now - deleteArmed > 2500) {
+        // First click: arm and give visual feedback
+        deleteArmed = now;
+        btn?.classList.add("zoteroai-danger");
+        btn?.setAttribute("title", getString("tooltip-delete-confirm"));
+        setTimeout(() => {
+          btn?.classList.remove("zoteroai-danger");
+          btn?.setAttribute("title", getString("tooltip-delete"));
+        }, 2500);
+        return;
+      }
+      deleteArmed = 0;
+      btn?.classList.remove("zoteroai-danger");
+      this.chatManager.deleteConversation(ctx.convID);
+      ctx.convID = this.chatManager.active?.id || null;
+      this.renderToolbar(ctx, this.contextProvider.getCurrentItem());
+      this.renderMessages(ctx);
     });
 
     // Single action button: send when idle, stop while generating

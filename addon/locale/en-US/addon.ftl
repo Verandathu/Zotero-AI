@@ -12,4 +12,5 @@ panel-input-hint = Ask about this paper…
 panel-send = Send
 panel-stop = Stop
 tooltip-new = New conversation
+tooltip-delete-confirm = Click again to delete
 tooltip-delete = Delete conversation

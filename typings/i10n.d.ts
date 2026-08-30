@@ -33,4 +33,5 @@ export type FluentMessageId =
   | 'toggle-follow'
   | 'toggle-fulltext'
   | 'tooltip-delete'
+  | 'tooltip-delete-confirm'
   | 'tooltip-new';

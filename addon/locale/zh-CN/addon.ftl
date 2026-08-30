@@ -12,4 +12,5 @@ panel-input-hint = 向 AI 提问关于本文的问题…
 panel-send = 发送
 panel-stop = 停止
 tooltip-new = 新建对话
+tooltip-delete-confirm = 再点一次确认删除
 tooltip-delete = 删除对话
