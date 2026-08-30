@@ -20,3 +20,4 @@ history-new = New conversation
 history-recent = Recent
 history-empty = No conversations yet
 history-rename = Rename
+panel-close = Close

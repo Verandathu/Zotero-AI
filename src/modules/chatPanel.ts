@@ -195,15 +195,22 @@ export class ChatPanel {
     );
     toolbar.appendChild(fullTextLabel);
 
-    // History popover (hidden by default, anchored under the toolbar)
-    const popover = this.el(doc, "div", "zoteroai-history-popover hidden");
+    // History drawer (Gemini sidenav pattern): slides in from the left edge
+    // over a dimming scrim. Open state = .zoteroai-history-open on the root.
+    const scrim = this.el(doc, "div", "zoteroai-history-scrim");
+    const popover = this.el(doc, "div", "zoteroai-history-popover");
+    const histHead = this.el(doc, "div", "zoteroai-history-head");
     const newBtn = this.el(
       doc,
       "button",
       "zoteroai-history-new",
-      `＋  ${getString("history-new")}`,
+      `✦  ${getString("history-new")}`,
     );
-    popover.appendChild(newBtn);
+    const closeBtn = this.el(doc, "button", "zoteroai-history-close", "✕");
+    closeBtn.title = getString("panel-close");
+    histHead.appendChild(newBtn);
+    histHead.appendChild(closeBtn);
+    popover.appendChild(histHead);
     popover.appendChild(
       this.el(
         doc,
@@ -214,6 +221,7 @@ export class ChatPanel {
     );
     const historyList = this.el(doc, "div", "zoteroai-history-list");
     popover.appendChild(historyList);
+    body.appendChild(scrim);
     body.appendChild(popover);
 
     body.appendChild(badgeRow);
@@ -251,30 +259,22 @@ export class ChatPanel {
       btnAction.classList.toggle("zoteroai-empty", !input.value.trim());
     });
 
-    // History popover open/close
+    // History drawer open/close (state class on the root drives CSS)
+    const openHistory = () => {
+      body.classList.add("zoteroai-history-open");
+      this.renderHistory(ctx);
+    };
+    const closeHistory = () => body.classList.remove("zoteroai-history-open");
     btnHistory.addEventListener("click", (e: any) => {
       e.stopPropagation();
-      const pop = body.querySelector(
-        ".zoteroai-history-popover",
-      ) as HTMLElement;
-      if (pop) {
-        const opening = pop.classList.contains("hidden");
-        pop.classList.toggle("hidden");
-        if (opening) {
-          this.renderHistory(ctx);
-        }
+      if (body.classList.contains("zoteroai-history-open")) {
+        closeHistory();
+      } else {
+        openHistory();
       }
     });
-    // Click anywhere else closes it
-    doc.addEventListener("click", (e: any) => {
-      const pop = body.querySelector(".zoteroai-history-popover");
-      if (pop && !pop.classList.contains("hidden")) {
-        const t = e.target as HTMLElement;
-        if (!pop.contains(t)) {
-          pop.classList.add("hidden");
-        }
-      }
-    });
+    closeBtn.addEventListener("click", closeHistory);
+    scrim.addEventListener("click", closeHistory);
   }
 
   private bindEvents(ctx: PanelContext) {
@@ -363,7 +363,7 @@ export class ChatPanel {
 
     newBtn.onclick = () => {
       this.startNewConversation(ctx);
-      pop.classList.add("hidden");
+      body.classList.remove("zoteroai-history-open");
     };
 
     list.innerHTML = "";
@@ -393,7 +393,7 @@ export class ChatPanel {
       title.title = conv.title;
       title.addEventListener("click", () => {
         this.switchConversation(ctx, conv.id);
-        pop.classList.add("hidden");
+        body.classList.remove("zoteroai-history-open");
       });
       const actions = this.el(doc, "div", "zoteroai-history-item-actions");
       const renameBtn = this.el(doc, "button", "zoteroai-history-act", "✎");

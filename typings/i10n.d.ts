@@ -9,6 +9,7 @@ export type FluentMessageId =
   | 'history-recent'
   | 'history-rename'
   | 'history-title'
+  | 'panel-close'
   | 'panel-copy'
   | 'panel-empty-hint'
   | 'panel-empty-hint-generic'

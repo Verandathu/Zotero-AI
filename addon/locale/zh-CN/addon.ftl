@@ -20,3 +20,4 @@ history-new = 发起新对话
 history-recent = 最近
 history-empty = 暂无对话
 history-rename = 重命名
+panel-close = 关闭
