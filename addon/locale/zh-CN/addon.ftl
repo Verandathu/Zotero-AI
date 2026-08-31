@@ -51,3 +51,5 @@ error-retry = 重试
 status-preparing = 正在准备文献上下文
 status-waiting = 正在等待回复
 status-streaming = 正在生成
+prompts-title = 预设提示词
+prompts-open = 打开预设提示词

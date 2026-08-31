@@ -51,3 +51,5 @@ error-retry = Retry
 status-preparing = Preparing paper context
 status-waiting = Waiting for response
 status-streaming = Generating
+prompts-title = Prompt presets
+prompts-open = Open prompt presets

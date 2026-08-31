@@ -23,6 +23,7 @@ interface PanelContext {
   contextVersion: number;
   meterBlocked: boolean;
   drawerReturnFocus?: HTMLElement;
+  promptReturnFocus?: HTMLElement;
   inputTimer?: any;
 }
 
@@ -45,6 +46,8 @@ const ICONS: Record<string, string> = {
   stop: '<rect x="7" y="7" width="10" height="10" rx="1"/>',
   quote: '<path d="M6 8h5v5H7c0 2 1 3 3 4M14 8h5v5h-4c0 2 1 3 3 4"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
+  sparkle:
+    '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/><path d="m19 14 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/>',
 };
 
 export class ChatPanel {
@@ -238,6 +241,30 @@ export class ChatPanel {
     body.appendChild(scrim);
     body.appendChild(drawer);
 
+    const promptScrim = this.el(doc, "div", "zoteroai-prompts-scrim");
+    const promptDrawer = this.el(doc, "section", "zoteroai-prompts-drawer");
+    promptDrawer.setAttribute("role", "dialog");
+    promptDrawer.setAttribute("aria-modal", "true");
+    promptDrawer.setAttribute("aria-label", getString("prompts-title"));
+    promptDrawer.setAttribute("aria-hidden", "true");
+    promptDrawer.appendChild(this.el(doc, "div", "zoteroai-prompts-handle"));
+    const promptHead = this.el(doc, "div", "zoteroai-prompts-head");
+    promptHead.appendChild(
+      this.el(doc, "div", "zoteroai-prompts-title", getString("prompts-title")),
+    );
+    promptHead.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-prompts-close",
+        "close",
+        getString("panel-close"),
+      ),
+    );
+    promptDrawer.appendChild(promptHead);
+    promptDrawer.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
+    body.appendChild(promptScrim);
+    body.appendChild(promptDrawer);
+
     const header = this.el(doc, "header", "zoteroai-header");
     const topbar = this.el(doc, "div", "zoteroai-topbar");
     topbar.appendChild(
@@ -305,8 +332,15 @@ export class ChatPanel {
     );
 
     const composer = this.el(doc, "footer", "zoteroai-composer");
-    composer.appendChild(this.el(doc, "div", "zoteroai-quick-prompts"));
     const inputShell = this.el(doc, "div", "zoteroai-input-shell");
+    inputShell.appendChild(
+      this.iconButton(
+        doc,
+        "zoteroai-prompts-trigger",
+        "sparkle",
+        getString("prompts-open"),
+      ),
+    );
     const input = this.el(
       doc,
       "textarea",
@@ -348,6 +382,14 @@ export class ChatPanel {
     composer.appendChild(liveRegion);
     body.appendChild(composer);
     body.appendChild(this.el(doc, "div", "zoteroai-snackbar"));
+    for (const selector of [
+      ".zoteroai-history-trigger",
+      ".zoteroai-prompts-trigger",
+    ]) {
+      const trigger = body.querySelector(selector) as HTMLButtonElement;
+      trigger.setAttribute("aria-haspopup", "dialog");
+      trigger.setAttribute("aria-expanded", "false");
+    }
   }
 
   private bindEvents(ctx: PanelContext) {
@@ -362,6 +404,15 @@ export class ChatPanel {
     );
     $(".zoteroai-history-scrim")?.addEventListener("click", () =>
       this.closeHistory(ctx),
+    );
+    $(".zoteroai-prompts-trigger")?.addEventListener("click", (event: Event) =>
+      this.openPrompts(ctx, event.currentTarget as HTMLElement),
+    );
+    $(".zoteroai-prompts-close")?.addEventListener("click", () =>
+      this.closePrompts(ctx),
+    );
+    $(".zoteroai-prompts-scrim")?.addEventListener("click", () =>
+      this.closePrompts(ctx),
     );
     $(".zoteroai-history-new")?.addEventListener("click", () => {
       this.startNewConversation(ctx);
@@ -393,6 +444,22 @@ export class ChatPanel {
           this.closeHistory(ctx);
         } else if (keyboard.key === "Tab") {
           this.trapDrawerFocus(ctx, keyboard);
+        }
+      },
+    );
+    $(".zoteroai-prompts-drawer")?.addEventListener(
+      "keydown",
+      (event: Event) => {
+        const keyboard = event as KeyboardEvent;
+        if (keyboard.key === "Escape") {
+          keyboard.preventDefault();
+          this.closePrompts(ctx);
+        } else if (keyboard.key === "Tab") {
+          this.trapFocus(
+            ctx.body.querySelector(".zoteroai-prompts-drawer") as HTMLElement,
+            ctx.doc,
+            keyboard,
+          );
         }
       },
     );
@@ -490,7 +557,9 @@ export class ChatPanel {
   }
 
   private openHistory(ctx: PanelContext, trigger: HTMLElement) {
+    this.closePrompts(ctx, false);
     ctx.drawerReturnFocus = trigger;
+    trigger.setAttribute("aria-expanded", "true");
     ctx.body.classList.add("zoteroai-history-open");
     const drawer = ctx.body.querySelector(
       ".zoteroai-history-drawer",
@@ -502,32 +571,64 @@ export class ChatPanel {
     )?.focus();
   }
 
-  private closeHistory(ctx: PanelContext) {
+  private closeHistory(ctx: PanelContext, restoreFocus = true) {
+    if (!ctx.body.classList.contains("zoteroai-history-open")) return;
     ctx.body.classList.remove("zoteroai-history-open");
     const drawer = ctx.body.querySelector(
       ".zoteroai-history-drawer",
     ) as HTMLElement;
     drawer.setAttribute("aria-hidden", "true");
-    ctx.drawerReturnFocus?.focus();
+    ctx.drawerReturnFocus?.setAttribute("aria-expanded", "false");
+    if (restoreFocus) ctx.drawerReturnFocus?.focus();
   }
 
   private trapDrawerFocus(ctx: PanelContext, event: KeyboardEvent) {
     const drawer = ctx.body.querySelector(
       ".zoteroai-history-drawer",
     ) as HTMLElement;
-    const controls = [...drawer.querySelectorAll("button,input")].filter(
+    this.trapFocus(drawer, ctx.doc, event);
+  }
+
+  private trapFocus(scope: HTMLElement, doc: Document, event: KeyboardEvent) {
+    const controls = [
+      ...scope.querySelectorAll("button,input,textarea"),
+    ].filter(
       (element) => !(element as HTMLButtonElement).disabled,
     ) as HTMLElement[];
     if (!controls.length) return;
     const first = controls[0];
     const last = controls[controls.length - 1];
-    if (event.shiftKey && ctx.doc.activeElement === first) {
+    if (event.shiftKey && doc.activeElement === first) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && ctx.doc.activeElement === last) {
+    } else if (!event.shiftKey && doc.activeElement === last) {
       event.preventDefault();
       first.focus();
     }
+  }
+
+  private openPrompts(ctx: PanelContext, trigger: HTMLElement) {
+    this.closeHistory(ctx, false);
+    ctx.promptReturnFocus = trigger;
+    trigger.setAttribute("aria-expanded", "true");
+    ctx.body.classList.add("zoteroai-prompts-open");
+    const drawer = ctx.body.querySelector(
+      ".zoteroai-prompts-drawer",
+    ) as HTMLElement;
+    drawer.setAttribute("aria-hidden", "false");
+    this.renderQuickPrompts(ctx);
+    (drawer.querySelector(".zoteroai-quick-btn") as HTMLButtonElement)?.focus();
+  }
+
+  private closePrompts(ctx: PanelContext, restoreFocus = true) {
+    if (!ctx.body.classList.contains("zoteroai-prompts-open")) return;
+    ctx.body.classList.remove("zoteroai-prompts-open");
+    const drawer = ctx.body.querySelector(
+      ".zoteroai-prompts-drawer",
+    ) as HTMLElement;
+    drawer.setAttribute("aria-hidden", "true");
+    ctx.promptReturnFocus?.setAttribute("aria-expanded", "false");
+    if (restoreFocus) ctx.promptReturnFocus?.focus();
   }
 
   private startNewConversation(ctx: PanelContext) {
@@ -734,23 +835,35 @@ export class ChatPanel {
     if (!container) return;
     container.innerHTML = "";
     for (const quickPrompt of getQuickPrompts()) {
-      const button = this.el(
-        ctx.doc,
-        "button",
-        "zoteroai-quick-btn",
-        quickPrompt.label,
+      const button = this.el(ctx.doc, "button", "zoteroai-quick-btn");
+      button.appendChild(
+        this.el(ctx.doc, "span", "zoteroai-quick-label", quickPrompt.label),
+      );
+      button.appendChild(
+        this.el(
+          ctx.doc,
+          "span",
+          "zoteroai-quick-preview",
+          quickPrompt.prompt.replace("$text", "").trim(),
+        ),
       );
       button.addEventListener("click", () => {
-        if (quickPrompt.forSelection)
-          void this.sendSelectionPrompt(ctx, quickPrompt.prompt);
-        else {
-          const input = ctx.body.querySelector(
-            ".zoteroai-input",
-          ) as HTMLTextAreaElement;
-          input.value = quickPrompt.prompt;
-          input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
-          void this.send(ctx);
+        let prompt = quickPrompt.prompt;
+        if (quickPrompt.forSelection) {
+          const selection = this.getSelection();
+          if (!selection) {
+            this.showSnackbar(ctx, getString("panel-no-selection"));
+            return;
+          }
+          prompt = prompt.replace("$text", selection);
         }
+        const input = ctx.body.querySelector(
+          ".zoteroai-input",
+        ) as HTMLTextAreaElement;
+        input.value = prompt;
+        input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
+        this.closePrompts(ctx, false);
+        input.focus();
       });
       container.appendChild(button);
     }
@@ -978,10 +1091,13 @@ export class ChatPanel {
     ) as HTMLElement;
     if (container.querySelector(".zoteroai-pending")) return;
     const pending = this.el(ctx.doc, "div", "zoteroai-pending");
-    pending.appendChild(this.el(ctx.doc, "span", "zoteroai-spinner"));
-    pending.appendChild(
-      this.el(ctx.doc, "span", undefined, getString(`status-${phase}` as any)),
-    );
+    pending.setAttribute("role", "status");
+    pending.setAttribute("aria-label", getString(`status-${phase}` as any));
+    const dots = this.el(ctx.doc, "span", "zoteroai-thinking-dots");
+    for (let index = 0; index < 3; index++) {
+      dots.appendChild(this.el(ctx.doc, "span"));
+    }
+    pending.appendChild(dots);
     container.appendChild(pending);
   }
 
@@ -1304,20 +1420,6 @@ export class ChatPanel {
     input.value = input.value ? `${input.value}\n\n${selection}` : selection;
     input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
     input.focus();
-  }
-
-  private async sendSelectionPrompt(ctx: PanelContext, template: string) {
-    const selection = this.getSelection();
-    if (!selection) {
-      this.showSnackbar(ctx, getString("panel-no-selection"));
-      return;
-    }
-    const input = ctx.body.querySelector(
-      ".zoteroai-input",
-    ) as HTMLTextAreaElement;
-    input.value = template.replace("$text", selection);
-    input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
-    await this.send(ctx);
   }
 
   private getSelection(): string | null {
