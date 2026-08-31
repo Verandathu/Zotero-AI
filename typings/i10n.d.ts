@@ -4,12 +4,12 @@
 // @ts-nocheck
 export type FluentMessageId =
   | 'action-cancel'
+  | 'action-generation-busy'
   | 'context-calculating'
   | 'context-limit-error'
   | 'context-none'
   | 'context-remaining'
   | 'context-reserved'
-  | 'context-use-current'
   | 'context-used'
   | 'error-details'
   | 'error-retry'

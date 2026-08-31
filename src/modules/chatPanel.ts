@@ -24,6 +24,7 @@ interface PanelContext {
   meterBlocked: boolean;
   drawerReturnFocus?: HTMLElement;
   promptReturnFocus?: HTMLElement;
+  selectionSnapshot?: string | null;
   inputTimer?: any;
 }
 
@@ -49,6 +50,22 @@ const ICONS: Record<string, string> = {
   sparkle:
     '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/><path d="m19 14 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/>',
 };
+
+export function normalizeSelectedText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00ad/g, "")
+    .replace(/([\p{L}])-\s*\n\s*(\p{Ll})/gu, "$1$2")
+    .split(/\n{2,}/)
+    .map((paragraph) =>
+      paragraph
+        .replace(/\s*\n\s*/g, " ")
+        .replace(/[ \t]+/g, " ")
+        .trim(),
+    )
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export class ChatPanel {
   apiClient = new ApiClient();
@@ -296,15 +313,6 @@ export class ChatPanel {
     const contextRow = this.el(doc, "div", "zoteroai-context-row");
     const badge = this.el(doc, "div", "zoteroai-context-badge");
     contextRow.appendChild(badge);
-    const useCurrent = this.el(
-      doc,
-      "button",
-      "zoteroai-use-current",
-      getString("context-use-current"),
-    ) as HTMLButtonElement;
-    useCurrent.type = "button";
-    useCurrent.hidden = true;
-    contextRow.appendChild(useCurrent);
     const fullTextLabel = this.el(doc, "label", "zoteroai-toggle-pill");
     const fullText = this.el(doc, "input") as HTMLInputElement;
     fullText.type = "checkbox";
@@ -405,6 +413,9 @@ export class ChatPanel {
     $(".zoteroai-history-scrim")?.addEventListener("click", () =>
       this.closeHistory(ctx),
     );
+    $(".zoteroai-prompts-trigger")?.addEventListener("pointerdown", () => {
+      ctx.selectionSnapshot = this.getSelection();
+    });
     $(".zoteroai-prompts-trigger")?.addEventListener("click", (event: Event) =>
       this.openPrompts(ctx, event.currentTarget as HTMLElement),
     );
@@ -419,9 +430,6 @@ export class ChatPanel {
       this.closeHistory(ctx);
     });
     $(".zoteroai-new-trigger")?.addEventListener("click", () =>
-      this.startNewConversation(ctx),
-    );
-    $(".zoteroai-use-current")?.addEventListener("click", () =>
       this.startNewConversation(ctx),
     );
     $(".zoteroai-history-search")?.addEventListener("input", () =>
@@ -476,9 +484,13 @@ export class ChatPanel {
       if (this.generation) this.stopGeneration();
       else void this.send(ctx);
     });
-    $(".zoteroai-insert-selection")?.addEventListener("click", () =>
-      this.insertSelection(ctx),
-    );
+    $(".zoteroai-insert-selection")?.addEventListener("pointerdown", () => {
+      ctx.selectionSnapshot = this.getSelection();
+    });
+    $(".zoteroai-insert-selection")?.addEventListener("click", () => {
+      this.insertSelection(ctx);
+      ctx.selectionSnapshot = null;
+    });
     const input = $(".zoteroai-input") as HTMLTextAreaElement | null;
     input?.addEventListener("input", () => {
       input.style.height = "auto";
@@ -488,6 +500,22 @@ export class ChatPanel {
       this.setGeneratingUI(ctx);
     });
     input?.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLocaleLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        input.select();
+        return;
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        ["c", "x", "v", "z", "y"].includes(event.key.toLocaleLowerCase())
+      ) {
+        event.stopPropagation();
+        return;
+      }
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         void this.send(ctx);
@@ -536,15 +564,6 @@ export class ChatPanel {
     badge.textContent = itemTitle || getString("context-none");
     badge.title = itemTitle || getString("context-none");
     badge.dataset.empty = itemTitle ? "false" : "true";
-    const mismatch = !!(
-      conversation?.itemKey &&
-      current?.key &&
-      conversation.itemKey !== current.key
-    );
-    const useCurrent = ctx.body.querySelector(
-      ".zoteroai-use-current",
-    ) as HTMLButtonElement;
-    useCurrent.hidden = !mismatch;
     const fullText = ctx.body.querySelector(
       ".zoteroai-ctx-fulltext",
     ) as HTMLInputElement;
@@ -632,16 +651,32 @@ export class ChatPanel {
   }
 
   private startNewConversation(ctx: PanelContext) {
+    if (this.generation) {
+      this.showSnackbar(ctx, getString("action-generation-busy"));
+      return;
+    }
     const item = this.contextProvider.getCurrentItem();
-    const conversation = this.chatManager.createConversation(
-      item
-        ? {
-            libraryID: item.libraryID,
-            key: item.key,
-            title: this.contextProvider.getItemTitle(item),
-          }
-        : undefined,
-    );
+    const itemBinding = item
+      ? {
+          libraryID: item.libraryID,
+          key: item.key,
+          title: this.contextProvider.getItemTitle(item),
+        }
+      : undefined;
+    const active = this.chatManager.active;
+    if (active && !active.messages.length && !active.lastError) {
+      if (itemBinding) {
+        this.chatManager.bindConversationToItem(active.id, itemBinding);
+      }
+      ctx.convID = active.id;
+      this.renderEveryPanel();
+      void this.refreshContext(ctx);
+      (
+        ctx.body.querySelector(".zoteroai-input") as HTMLTextAreaElement
+      )?.focus();
+      return;
+    }
+    const conversation = this.chatManager.createConversation(itemBinding);
     ctx.convID = conversation.id;
     this.renderEveryPanel();
     void this.refreshContext(ctx);
@@ -793,6 +828,10 @@ export class ChatPanel {
   }
 
   private deleteWithUndo(ctx: PanelContext, id: string) {
+    if (this.generation?.convID === id) {
+      this.showSnackbar(ctx, getString("action-generation-busy"));
+      return;
+    }
     const deleted = this.chatManager.stageDeleteConversation(id);
     if (!deleted) return;
     this.renderEveryPanel();
@@ -850,12 +889,13 @@ export class ChatPanel {
       button.addEventListener("click", () => {
         let prompt = quickPrompt.prompt;
         if (quickPrompt.forSelection) {
-          const selection = this.getSelection();
+          const selection = ctx.selectionSnapshot || this.getSelection();
           if (!selection) {
             this.showSnackbar(ctx, getString("panel-no-selection"));
             return;
           }
           prompt = prompt.replace("$text", selection);
+          ctx.selectionSnapshot = null;
         }
         const input = ctx.body.querySelector(
           ".zoteroai-input",
@@ -941,6 +981,7 @@ export class ChatPanel {
       edit.addEventListener("click", () =>
         this.beginMessageEdit(ctx, conversation, message, element, index),
       );
+      edit.disabled = !!this.generation;
       footer.appendChild(edit);
     } else {
       const copy = this.iconButton(
@@ -961,6 +1002,10 @@ export class ChatPanel {
           getString("message-regenerate"),
         );
         retry.addEventListener("click", () => {
+          if (this.generation) {
+            this.showSnackbar(ctx, getString("action-generation-busy"));
+            return;
+          }
           if (
             this.chatManager.truncateFromMessage(conversation.id, message.id)
           ) {
@@ -968,6 +1013,7 @@ export class ChatPanel {
             void this.runGeneration(ctx, conversation.id);
           }
         });
+        retry.disabled = !!this.generation;
         footer.appendChild(retry);
       }
     }
@@ -1016,6 +1062,10 @@ export class ChatPanel {
     );
     cancel.addEventListener("click", () => this.renderMessages(ctx));
     submit.addEventListener("click", () => {
+      if (this.generation) {
+        this.showSnackbar(ctx, getString("action-generation-busy"));
+        return;
+      }
       if (
         this.chatManager.editAndTruncate(
           conversation.id,
@@ -1077,6 +1127,10 @@ export class ChatPanel {
       getString("error-retry"),
     );
     retry.addEventListener("click", () => {
+      if (this.generation) {
+        this.showSnackbar(ctx, getString("action-generation-busy"));
+        return;
+      }
       this.chatManager.setError(conversation.id);
       this.renderEveryPanel();
       void this.runGeneration(ctx, conversation.id);
@@ -1303,6 +1357,15 @@ export class ChatPanel {
     button.title = getString(generating ? "panel-stop" : "panel-send");
     button.setAttribute("aria-label", button.title);
     button.disabled = !generating && (!input.value.trim() || ctx.meterBlocked);
+    for (const selector of [
+      ".zoteroai-new-trigger",
+      ".zoteroai-history-new",
+      ".zoteroai-prompts-trigger",
+      ".zoteroai-insert-selection",
+    ]) {
+      const control = ctx.body.querySelector(selector) as HTMLButtonElement;
+      if (control) control.disabled = generating;
+    }
     input.disabled = !!(
       generating && this.generation?.convID !== this.chatManager.active?.id
     );
@@ -1409,7 +1472,7 @@ export class ChatPanel {
   }
 
   private insertSelection(ctx: PanelContext) {
-    const selection = this.getSelection();
+    const selection = ctx.selectionSnapshot || this.getSelection();
     if (!selection) {
       this.showSnackbar(ctx, getString("panel-no-selection"));
       return;
@@ -1417,7 +1480,14 @@ export class ChatPanel {
     const input = ctx.body.querySelector(
       ".zoteroai-input",
     ) as HTMLTextAreaElement;
-    input.value = input.value ? `${input.value}\n\n${selection}` : selection;
+    const normalized = normalizeSelectedText(selection);
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    const leading = before && !/\s$/.test(before) ? "\n\n" : "";
+    const trailing = after && !/^\s/.test(after) ? "\n\n" : "";
+    input.setRangeText(`${leading}${normalized}${trailing}`, start, end, "end");
     input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
     input.focus();
   }

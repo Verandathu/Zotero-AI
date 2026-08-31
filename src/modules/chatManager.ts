@@ -221,6 +221,26 @@ export class ChatManager {
     }
   }
 
+  bindConversationToItem(
+    id: string,
+    item: { libraryID?: number; key: string; title: string },
+  ): boolean {
+    const conversation = this.find(id);
+    if (
+      !conversation ||
+      conversation.messages.length ||
+      conversation.lastError
+    ) {
+      return false;
+    }
+    conversation.libraryID = item.libraryID;
+    conversation.itemKey = item.key;
+    conversation.itemTitle = item.title;
+    conversation.updatedAt = Date.now();
+    this.scheduleSave();
+    return true;
+  }
+
   appendMessages(convID: string, messages: ChatMessage[]) {
     const conversation = this.find(convID);
     if (!conversation) {

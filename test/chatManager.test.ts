@@ -68,4 +68,28 @@ describe("chat manager", function () {
     );
     manager.dispose();
   });
+
+  it("reuses an empty conversation when rebinding to a paper", function () {
+    const manager = new ChatManager();
+    const conversation = manager.createConversation();
+    assert.isTrue(
+      manager.bindConversationToItem(conversation.id, {
+        libraryID: 1,
+        key: "CURRENT",
+        title: "Current paper",
+      }),
+    );
+    assert.equal(manager.list.length, 1);
+    assert.equal(manager.active?.itemKey, "CURRENT");
+    manager.appendMessages(conversation.id, [
+      { role: "user", content: "question" },
+    ]);
+    assert.isFalse(
+      manager.bindConversationToItem(conversation.id, {
+        key: "OTHER",
+        title: "Other paper",
+      }),
+    );
+    manager.dispose();
+  });
 });
