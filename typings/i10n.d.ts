@@ -60,6 +60,8 @@ export type FluentMessageId =
   | 'pref-temperature'
   | 'pref-title'
   | 'prefs-title'
+  | 'prompts-open'
+  | 'prompts-title'
   | 'scroll-bottom'
   | 'section-chat-header'
   | 'section-chat-sidenav'
