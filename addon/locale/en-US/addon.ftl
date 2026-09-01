@@ -48,6 +48,7 @@ error-title = Response failed
 error-details = View details
 error-retry = Retry
 status-preparing = Preparing paper context
+status-researching = Searching for referenced papers
 status-waiting = Waiting for response
 status-streaming = Generating
 prompts-title = Prompt presets

@@ -92,4 +92,20 @@ describe("chat manager", function () {
     );
     manager.dispose();
   });
+
+  it("flags auto-derived titles and finalizes AI-summarized ones", function () {
+    const manager = new ChatManager();
+    const conversation = manager.createConversation();
+    assert.isNotTrue(conversation.titleAuto);
+    manager.appendMessages(conversation.id, [
+      { role: "user", content: "Explain attention in transformers" },
+    ]);
+    // deriveTitle turns the first message into a placeholder and flags it
+    assert.isTrue(conversation.titleAuto);
+    assert.equal(conversation.title, "Explain attention in transformers");
+    manager.setTitle(conversation.id, "Attention mechanisms");
+    assert.isNotTrue(conversation.titleAuto);
+    assert.equal(conversation.title, "Attention mechanisms");
+    manager.dispose();
+  });
 });

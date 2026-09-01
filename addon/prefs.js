@@ -16,3 +16,7 @@ pref("contextWindowTokens", 128000);
 pref("systemPrompt", "");
 // Custom quick prompts, JSON array of { label, prompt }; empty means built-in defaults
 pref("quickPrompts", "");
+// Detect referenced papers in a message and search the library / web for them
+pref("agenticResearch", true);
+// Maximum number of referenced works to resolve per message
+pref("agenticMaxWorks", 5);

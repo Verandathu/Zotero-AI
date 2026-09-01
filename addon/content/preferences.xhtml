@@ -134,6 +134,29 @@
     rows="4"
   ></html:textarea>
 </groupbox>
+<groupbox>
+  <label><html:h2 data-l10n-id="pref-agentic-header"></html:h2></label>
+  <checkbox
+    id="zotero-prefpane-__addonRef__-agenticResearch"
+    preference="agenticResearch"
+    data-l10n-id="pref-agenticresearch"
+  />
+  <hbox align="center">
+    <html:label
+      style="width: 12em"
+      for="zotero-prefpane-__addonRef__-agenticMaxWorks"
+      data-l10n-id="pref-agenticmaxworks"
+    ></html:label>
+    <html:input
+      type="number"
+      step="1"
+      min="1"
+      max="20"
+      id="zotero-prefpane-__addonRef__-agenticMaxWorks"
+      preference="agenticMaxWorks"
+    ></html:input>
+  </hbox>
+</groupbox>
 <vbox>
   <html:label
     data-l10n-id="pref-help"

@@ -12,6 +12,11 @@ export interface ConversationMessage {
 export interface Conversation {
   id: string;
   title: string;
+  /**
+   * When true, the title is a placeholder (either the default or a truncated
+   * first message) and has not yet been refined into a summary.
+   */
+  titleAuto?: boolean;
   /** Library + item key permanently bind a conversation to its source item. */
   libraryID?: number;
   itemKey?: string;
@@ -63,6 +68,10 @@ export function normalizeConversationRecord(
   return {
     id: value.id,
     title: typeof value.title === "string" ? value.title : "New conversation",
+    titleAuto:
+      value.titleAuto === true
+        ? true
+        : value.title === "New conversation" && messages.length > 0,
     ...(Number.isFinite(value.libraryID)
       ? { libraryID: Number(value.libraryID) }
       : {}),
@@ -216,9 +225,25 @@ export class ChatManager {
     const conversation = this.find(id);
     if (conversation && title.trim()) {
       conversation.title = title.trim();
+      conversation.titleAuto = false;
       conversation.updatedAt = Date.now();
       this.scheduleSave();
     }
+  }
+
+  /** Set a finalized (e.g. AI-summarized) title for a conversation. */
+  setTitle(id: string, title: string) {
+    const conversation = this.find(id);
+    if (conversation && title.trim()) {
+      conversation.title = title.trim();
+      conversation.titleAuto = false;
+      conversation.updatedAt = Date.now();
+      this.scheduleSave();
+    }
+  }
+
+  get(id: string): Conversation | undefined {
+    return this.find(id);
   }
 
   bindConversationToItem(
@@ -379,7 +404,9 @@ export class ChatManager {
       (message) => message.role === "user",
     );
     if (firstUser) {
-      conversation.title = firstUser.content.replace(/\s+/g, " ").slice(0, 40);
+      conversation.title = firstUser.content.replace(/\s+/g, " ").slice(0, 44);
+      // Placeholder title; the panel will refine it with a model summary.
+      conversation.titleAuto = true;
     }
   }
 

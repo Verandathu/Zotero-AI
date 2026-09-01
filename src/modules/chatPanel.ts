@@ -1,16 +1,18 @@
 import { getLocaleID, getString } from "../utils/locale";
+import { renderMarkdownHTML } from "../utils/markdown";
 import { getPref, setPref } from "../utils/prefs";
 import { ApiClient, ChatMessage } from "./apiClient";
 import { ChatManager, Conversation, ConversationMessage } from "./chatManager";
 import { estimateContextUsage } from "./contextEstimator";
 import { ContextProvider, ItemContext } from "./contextProvider";
-import { getQuickPrompts } from "./quickPrompts";
+import { getQuickPrompts, QuickPrompt } from "./quickPrompts";
+import { ResearchAgent } from "./researchAgent";
 
 const PANE_ID = "zoteroai-chat";
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
 
 type HistoryFilter = "all" | "item";
-type GenerationPhase = "preparing" | "waiting" | "streaming";
+type GenerationPhase = "preparing" | "researching" | "waiting" | "streaming";
 
 interface PanelContext {
   body: HTMLElement;
@@ -25,6 +27,8 @@ interface PanelContext {
   drawerReturnFocus?: HTMLElement;
   promptReturnFocus?: HTMLElement;
   selectionSnapshot?: string | null;
+  insertCaretStart?: number | null;
+  insertCaretEnd?: number | null;
   inputTimer?: any;
 }
 
@@ -71,6 +75,7 @@ export class ChatPanel {
   apiClient = new ApiClient();
   chatManager = new ChatManager();
   contextProvider = new ContextProvider();
+  researchAgent = new ResearchAgent(this.contextProvider);
 
   private panels = new Map<HTMLElement, PanelContext>();
   private contextCache = new Map<string, Promise<ItemContext | null>>();
@@ -126,7 +131,7 @@ export class ChatPanel {
   ) {
     await this.chatManager.load();
     const ctx = this.ensurePanel(body, body.ownerDocument!);
-    ctx.currentItemKey = item?.key || null;
+    ctx.currentItemKey = this.contextProvider.sourceItem(item!)?.key || null;
     this.renderAll(ctx);
     void this.refreshContext(ctx);
   }
@@ -134,7 +139,8 @@ export class ChatPanel {
   async mountReaderPanel(root: HTMLElement, doc: Document) {
     await this.chatManager.load();
     const ctx = this.ensurePanel(root, doc);
-    ctx.currentItemKey = this.contextProvider.getCurrentItem()?.key || null;
+    ctx.currentItemKey =
+      this.contextProvider.getCurrentSourceItem()?.key || null;
     this.renderAll(ctx);
     void this.refreshContext(ctx);
   }
@@ -486,10 +492,22 @@ export class ChatPanel {
     });
     $(".zoteroai-insert-selection")?.addEventListener("pointerdown", () => {
       ctx.selectionSnapshot = this.getSelection();
+      // Capture the caret before the button steals focus, so the inserted
+      // text lands at the user's cursor rather than the start of the draft.
+      const input = $(".zoteroai-input") as HTMLTextAreaElement | null;
+      if (input && ctx.doc.activeElement === input) {
+        ctx.insertCaretStart = input.selectionStart;
+        ctx.insertCaretEnd = input.selectionEnd;
+      } else {
+        ctx.insertCaretStart = null;
+        ctx.insertCaretEnd = null;
+      }
     });
     $(".zoteroai-insert-selection")?.addEventListener("click", () => {
       this.insertSelection(ctx);
       ctx.selectionSnapshot = null;
+      ctx.insertCaretStart = null;
+      ctx.insertCaretEnd = null;
     });
     const input = $(".zoteroai-input") as HTMLTextAreaElement | null;
     input?.addEventListener("input", () => {
@@ -540,7 +558,7 @@ export class ChatPanel {
 
   private renderHeader(ctx: PanelContext) {
     const conversation = this.chatManager.active;
-    const current = this.contextProvider.getCurrentItem();
+    const current = this.contextProvider.getCurrentSourceItem();
     ctx.currentItemKey = current?.key || ctx.currentItemKey;
     if (
       conversation &&
@@ -655,7 +673,7 @@ export class ChatPanel {
       this.showSnackbar(ctx, getString("action-generation-busy"));
       return;
     }
-    const item = this.contextProvider.getCurrentItem();
+    const item = this.contextProvider.getCurrentSourceItem();
     const itemBinding = item
       ? {
           libraryID: item.libraryID,
@@ -887,26 +905,31 @@ export class ChatPanel {
         ),
       );
       button.addEventListener("click", () => {
-        let prompt = quickPrompt.prompt;
-        if (quickPrompt.forSelection) {
-          const selection = ctx.selectionSnapshot || this.getSelection();
-          if (!selection) {
-            this.showSnackbar(ctx, getString("panel-no-selection"));
-            return;
-          }
-          prompt = prompt.replace("$text", selection);
-          ctx.selectionSnapshot = null;
-        }
-        const input = ctx.body.querySelector(
-          ".zoteroai-input",
-        ) as HTMLTextAreaElement;
-        input.value = prompt;
-        input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
+        this.useQuickPrompt(ctx, quickPrompt);
         this.closePrompts(ctx, false);
-        input.focus();
       });
       container.appendChild(button);
     }
+  }
+
+  /** Fill the composer with a quick-prompt template and focus it. */
+  private useQuickPrompt(ctx: PanelContext, quickPrompt: QuickPrompt) {
+    let prompt = quickPrompt.prompt;
+    if (quickPrompt.forSelection) {
+      const selection = ctx.selectionSnapshot || this.getSelection();
+      if (!selection) {
+        this.showSnackbar(ctx, getString("panel-no-selection"));
+        return;
+      }
+      prompt = prompt.replace("$text", selection);
+      ctx.selectionSnapshot = null;
+    }
+    const input = ctx.body.querySelector(
+      ".zoteroai-input",
+    ) as HTMLTextAreaElement;
+    input.value = prompt;
+    input.dispatchEvent(new ctx.doc.defaultView!.Event("input"));
+    input.focus();
   }
 
   private renderMessages(ctx: PanelContext) {
@@ -919,23 +942,37 @@ export class ChatPanel {
     if (!conversation || !conversation.messages.length) {
       const wrap = this.el(ctx.doc, "div", "zoteroai-empty-state");
       wrap.appendChild(this.el(ctx.doc, "div", "zoteroai-empty-icon", "✦"));
-      wrap.appendChild(
-        this.el(
-          ctx.doc,
-          "div",
-          "zoteroai-empty-greeting",
-          getString("panel-empty-hint"),
-        ),
-      );
       const title =
         conversation?.itemTitle ||
         this.contextProvider.getItemTitle(
           this.contextProvider.getCurrentItem(),
         );
+      wrap.appendChild(
+        this.el(
+          ctx.doc,
+          "div",
+          "zoteroai-empty-greeting",
+          getString(title ? "panel-empty-hint" : "panel-empty-hint-generic"),
+        ),
+      );
       if (title)
         wrap.appendChild(
           this.el(ctx.doc, "div", "zoteroai-empty-title", title),
         );
+      const chips = this.el(ctx.doc, "div", "zoteroai-suggestion-chips");
+      for (const quickPrompt of getQuickPrompts().slice(0, 4)) {
+        const chip = this.el(
+          ctx.doc,
+          "button",
+          "zoteroai-suggestion-chip",
+          quickPrompt.label,
+        );
+        chip.addEventListener("click", () =>
+          this.useQuickPrompt(ctx, quickPrompt),
+        );
+        chips.appendChild(chip);
+      }
+      wrap.appendChild(chips);
       container.appendChild(wrap);
     } else {
       conversation.messages.forEach((message, index) => {
@@ -1160,60 +1197,10 @@ export class ChatPanel {
     element: HTMLElement,
     text: string,
   ) {
-    const escaped = text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    const html = escaped
-      .replace(
-        /```(\w*)\n([\s\S]*?)```/g,
-        (_match, _lang, code) => `<pre><code>${code}</code></pre>`,
-      )
-      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-      .replace(/^### (.*)$/gm, "<h4>$1</h4>")
-      .replace(/^## (.*)$/gm, "<h3>$1</h3>")
-      .replace(/^# (.*)$/gm, "<h2>$1</h2>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
-      .replace(
-        /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-        '<a href="$2" target="_blank">$1</a>',
-      )
-      .replace(
-        /(^\|.+\|\n^\|(?:\s*:?-+:?\s*\|)+\n(?:^\|.+\|\n?)+)/gm,
-        (table: string) => {
-          const rows = table
-            .trim()
-            .split("\n")
-            .map((line) =>
-              line
-                .slice(1, -1)
-                .split("|")
-                .map((cell) => cell.trim()),
-            );
-          const header = rows[0].map((cell) => `<th>${cell}</th>`).join("");
-          const body = rows
-            .slice(2)
-            .map(
-              (row) =>
-                `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`,
-            )
-            .join("");
-          return `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
-        },
-      )
-      .replace(
-        /^(?:[-*] (.*)\n?)+/gm,
-        (block: string) =>
-          `<ul>${block
-            .trim()
-            .split("\n")
-            .map((line) => `<li>${line.replace(/^[-*] /, "")}</li>`)
-            .join("")}</ul>`,
-      )
-      .replace(/^(?!<[thuplo])(.+)$/gm, "<p>$1</p>");
     element.innerHTML = "";
-    element.appendChild(ctx.doc.createRange().createContextualFragment(html));
+    element.appendChild(
+      ctx.doc.createRange().createContextualFragment(renderMarkdownHTML(text)),
+    );
   }
 
   private async send(ctx: PanelContext) {
@@ -1251,7 +1238,24 @@ export class ChatPanel {
       if (!conversation) return;
       const itemContext = await this.getConversationContext(conversation);
       if (!this.generation || this.generation.cancelled) return;
-      const system = this.buildSystemPrompt(itemContext);
+      let researchContext = "";
+      if (getPref("agenticResearch")) {
+        try {
+          const latestUser =
+            this.chatManager
+              .toAPIMessages(convID)
+              .filter((m) => m.role === "user")
+              .pop()?.content || "";
+          this.generation.phase = "researching";
+          this.renderEveryPanel();
+          const research = await this.researchAgent.research(latestUser);
+          if (!this.generation || this.generation.cancelled) return;
+          if (research?.context) researchContext = research.context;
+        } catch (error) {
+          ztoolkit.log("Zotero AI: agentic research failed", error);
+        }
+      }
+      const system = this.buildSystemPrompt(itemContext, researchContext);
       const history: ChatMessage[] = [
         { role: "system", content: system },
         ...this.chatManager.toAPIMessages(convID),
@@ -1271,9 +1275,13 @@ export class ChatPanel {
       let reasoning = "";
       let responseElement: HTMLElement | null = null;
       let reasoningElement: HTMLElement | null = null;
+      let renderScheduled = false;
       const container = ctx.body.querySelector(
         ".zoteroai-messages",
       ) as HTMLElement;
+      const requestFrame: (callback: () => void) => void =
+        ctx.doc.defaultView?.requestAnimationFrame?.bind(ctx.doc.defaultView) ||
+        ((callback) => setTimeout(callback, 16));
       await this.apiClient.chatStream(history, {
         onDelta: (delta) => {
           if (!this.generation || this.generation.convID !== convID) return;
@@ -1293,12 +1301,21 @@ export class ChatPanel {
             );
             container.appendChild(responseElement);
           }
-          const body = responseElement.querySelector(
-            ".zoteroai-msg-content",
-          ) as HTMLElement;
-          this.renderMarkdown(ctx, body, streamed);
-          if (this.isNearBottom(container))
-            container.scrollTop = container.scrollHeight;
+          // Coalesce markdown re-renders to one animation frame so long,
+          // fast streams never thrash the DOM (O(n^2) worst case).
+          if (!renderScheduled) {
+            renderScheduled = true;
+            requestFrame(() => {
+              renderScheduled = false;
+              if (!this.generation || this.generation.convID !== convID) return;
+              const body = responseElement?.querySelector(
+                ".zoteroai-msg-content",
+              ) as HTMLElement | null;
+              if (body) this.renderMarkdown(ctx, body, streamed);
+              if (this.isNearBottom(container))
+                container.scrollTop = container.scrollHeight;
+            });
+          }
           this.setGeneratingUI(ctx);
         },
         onReasoning: (delta) => {
@@ -1316,6 +1333,7 @@ export class ChatPanel {
         },
         onDone: () => {
           this.chatManager.setLastAssistant(convID, streamed);
+          void this.generateConversationTitle(convID);
         },
         onError: (message) => {
           if (streamed) this.chatManager.setLastAssistant(convID, streamed);
@@ -1327,6 +1345,31 @@ export class ChatPanel {
       this.sending = false;
       this.renderEveryPanel();
       for (const panel of this.panels.values()) void this.refreshContext(panel);
+    }
+  }
+
+  /**
+   * Refine the auto-derived conversation title into a short AI summary,
+   * mirroring Gemini's generated chat names. Runs detached from streaming so
+   * it never blocks the main loop.
+   */
+  private async generateConversationTitle(convID: string) {
+    const conversation = this.chatManager.get(convID);
+    if (!conversation?.titleAuto) return;
+    const opening = conversation.messages
+      .filter((message) => message.role === "user")
+      .slice(0, 2)
+      .map((message) => message.content)
+      .join("\n");
+    if (!opening.trim()) return;
+    try {
+      const title = await this.apiClient.summarizeTitle(opening);
+      if (title && this.chatManager.get(convID)?.titleAuto !== false) {
+        this.chatManager.setTitle(convID, title);
+        this.renderEveryPanel();
+      }
+    } catch (error) {
+      ztoolkit.log("Zotero AI: title generation failed", error);
     }
   }
 
@@ -1452,22 +1495,29 @@ export class ChatPanel {
     return String(value);
   }
 
-  private buildSystemPrompt(context: ItemContext | null): string {
+  private buildSystemPrompt(
+    context: ItemContext | null,
+    researchContext = "",
+  ): string {
     let prompt =
       getPref("systemPrompt") ||
       "You are a research assistant embedded in Zotero, a reference manager. Answer accurately and concisely; use Markdown formatting.";
-    if (!context) return prompt;
-    const parts = [
-      `The user is currently viewing this paper:\nTitle: ${context.title}`,
-      context.meta,
-      context.fullText
-        ? `Full text (may be truncated):\n"""\n${context.fullText}\n"""`
-        : "",
-    ].filter(Boolean);
-    prompt += `\n\n${parts.join("\n\n")}`;
-    if (context.truncated)
-      prompt +=
-        "\n\nNote: the full text was truncated; say so if the answer may depend on the missing part.";
+    const parts: string[] = [];
+    if (context) {
+      parts.push(
+        `The user is currently viewing this paper:\nTitle: ${context.title}`,
+        context.meta,
+        context.fullText
+          ? `Full text (may be truncated):\n"""\n${context.fullText}\n"""`
+          : "",
+      );
+      if (context.truncated)
+        parts.push(
+          "Note: the full text was truncated; say so if the answer may depend on the missing part.",
+        );
+    }
+    if (researchContext) parts.push(researchContext);
+    if (parts.length) prompt += `\n\n${parts.join("\n\n")}`;
     return prompt;
   }
 
@@ -1481,8 +1531,10 @@ export class ChatPanel {
       ".zoteroai-input",
     ) as HTMLTextAreaElement;
     const normalized = normalizeSelectedText(selection);
-    const start = input.selectionStart ?? input.value.length;
-    const end = input.selectionEnd ?? start;
+    // Prefer the caret captured on pointerdown; fall back to appending at the
+    // end of the draft when the composer wasn't focused.
+    const start = ctx.insertCaretStart ?? input.value.length;
+    const end = ctx.insertCaretEnd ?? start;
     const before = input.value.slice(0, start);
     const after = input.value.slice(end);
     const leading = before && !/\s$/.test(before) ? "\n\n" : "";

@@ -18,6 +18,8 @@ declare namespace _ZoteroTypes {
       "contextWindowTokens": number;
       "systemPrompt": string;
       "quickPrompts": string;
+      "agenticResearch": boolean;
+      "agenticMaxWorks": number;
     };
   }
 }

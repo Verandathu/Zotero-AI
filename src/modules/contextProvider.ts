@@ -107,13 +107,42 @@ export class ContextProvider {
     return undefined;
   }
 
-  /** Short display title for the context badge. */
+  /**
+   * For an attachment (e.g. the PDF open in the reader), resolve the parent
+   * regular item — the actual paper — so titles and metadata are not the
+   * file name.
+   */
+  sourceItem(item: Zotero.Item): Zotero.Item {
+    if (item?.isAttachment()) {
+      try {
+        const parentID = (item as any).parentItemID ?? (item as any).parentID;
+        const parent: Zotero.Item | undefined = parentID
+          ? Zotero.Items.get(parentID)
+          : undefined;
+        if (parent?.isRegularItem()) {
+          return parent;
+        }
+      } catch (e) {
+        // Fall through to the attachment itself
+      }
+    }
+    return item;
+  }
+
+  /** The current item resolved to its regular-item source counterpart. */
+  getCurrentSourceItem(): Zotero.Item | undefined {
+    const item = this.getCurrentItem();
+    return item ? this.sourceItem(item) : undefined;
+  }
+
+  /** Short display title for the context badge (paper title, not file name). */
   getItemTitle(item: Zotero.Item | undefined): string {
     if (!item) {
       return "";
     }
     try {
-      return item.getField("title") || item.getDisplayTitle?.() || "";
+      const source = this.sourceItem(item);
+      return source.getField("title") || source.getDisplayTitle?.() || "";
     } catch (e) {
       return "";
     }
@@ -124,12 +153,12 @@ export class ContextProvider {
    * (optionally) the indexed full text.
    */
   async buildContext(item: Zotero.Item): Promise<ItemContext> {
-    const meta = this.getMetadata(item);
+    const source = this.sourceItem(item);
     const ctx: ItemContext = {
-      itemID: item.id,
-      itemKey: item.key,
+      itemID: source.id,
+      itemKey: source.key,
       title: this.getItemTitle(item),
-      meta,
+      meta: this.getMetadata(item),
     };
     if (!getPref("includeFullText")) {
       return ctx;
@@ -151,7 +180,45 @@ export class ContextProvider {
     return ctx;
   }
 
+  /**
+   * Build a compact context for an additional, referenced paper (used by the
+   * cross-document research agent). Full text is capped much lower than the
+   * primary item so several works can be compared without overflowing the
+   * context window.
+   */
+  async buildReferenceContext(
+    item: Zotero.Item,
+    options: { fullTextLimit?: number } = {},
+  ): Promise<ItemContext> {
+    const source = this.sourceItem(item);
+    const ctx: ItemContext = {
+      itemID: source.id,
+      itemKey: source.key,
+      title: this.getItemTitle(item),
+      meta: this.getMetadata(item),
+    };
+    const limit = options.fullTextLimit ?? 6000;
+    if (limit <= 0) {
+      return ctx;
+    }
+    try {
+      const text = await this.getFullText(item);
+      if (text) {
+        if (text.length > limit) {
+          ctx.fullText = text.slice(0, limit);
+          ctx.truncated = true;
+        } else {
+          ctx.fullText = text;
+        }
+      }
+    } catch (e) {
+      ztoolkit.log("Zotero AI: reference fulltext extraction failed", e);
+    }
+    return ctx;
+  }
+
   private getMetadata(item: Zotero.Item): string {
+    const source = this.sourceItem(item);
     const fields = [
       "title",
       "creator",
@@ -165,7 +232,7 @@ export class ContextProvider {
     for (const field of fields) {
       try {
         if (field === "creator") {
-          const creators = item.getCreators();
+          const creators = source.getCreators();
           if (creators?.length) {
             lines.push(
               `Creators: ${creators.map((c: any) => `${c.firstName || ""} ${c.lastName || ""}`.trim()).join(", ")}`,
@@ -173,7 +240,7 @@ export class ContextProvider {
           }
           continue;
         }
-        const value = item.getField(field);
+        const value = source.getField(field);
         if (value) {
           lines.push(
             `${field === "abstractNote" ? "Abstract" : field}: ${value}`,

@@ -142,6 +142,82 @@ export class ApiClient {
   }
 
   /**
+   * Send a single non-streaming completion and return the plain text.
+   * Used for lightweight side tasks (e.g. generating conversation titles)
+   * that should not disturb the streaming chat loop.
+   */
+  async complete(
+    messages: ChatMessage[],
+    options: { maxTokens?: number; temperature?: number } = {},
+  ): Promise<string> {
+    const baseURL = (getPref("baseURL") || "").replace(/\/+$/, "");
+    const apiKey = getPref("apiKey");
+    const model = getPref("model");
+    if (!baseURL || !model) {
+      return "";
+    }
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      stream: false,
+      temperature: options.temperature ?? getPref("temperature"),
+    };
+    const maxTokens = options.maxTokens ?? getPref("maxTokens");
+    if (maxTokens > 0) {
+      body.max_tokens = maxTokens;
+    }
+    const win = this.win();
+    const doFetch =
+      win?.fetch?.bind(win) || (globalThis as any).fetch?.bind(globalThis);
+    if (!doFetch) {
+      return "";
+    }
+    try {
+      const response = await doFetch(`${baseURL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        return "";
+      }
+      const data = await response.json();
+      return (
+        data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? ""
+      );
+    } catch (e) {
+      ztoolkit.log("Zotero AI: completion request failed", e);
+      return "";
+    }
+  }
+
+  /**
+   * Summarize a conversation's opening message(s) into a short title,
+   * mirroring Gemini's auto-generated chat names.
+   */
+  async summarizeTitle(text: string): Promise<string> {
+    const raw = await this.complete(
+      [
+        {
+          role: "system",
+          content:
+            "You generate short, descriptive titles. Given a user's opening message, reply with a title of at most 6 words that captures its topic. Output only the title — no quotes, no period, no explanation.",
+        },
+        { role: "user", content: text.slice(0, 3000) },
+      ],
+      { maxTokens: 16, temperature: 0.2 },
+    );
+    const title = raw
+      .replace(/^["'\s]+|["'\s]+$/g, "")
+      .replace(/[.。]$/, "")
+      .trim();
+    return title.slice(0, 72);
+  }
+
+  /**
    * Parse an SSE response body and invoke the callback for each content delta.
    */
   private async consumeSSE(

@@ -48,6 +48,7 @@ error-title = 回复失败
 error-details = 查看详情
 error-retry = 重试
 status-preparing = 正在准备文献上下文
+status-researching = 正在检索相关文献
 status-waiting = 正在等待回复
 status-streaming = 正在生成
 prompts-title = 预设提示词
