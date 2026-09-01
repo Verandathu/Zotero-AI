@@ -541,6 +541,23 @@ export class ChatPanel {
     });
     const messages = $(".zoteroai-messages") as HTMLElement | null;
     messages?.addEventListener("scroll", () => this.updateScrollButton(ctx));
+    messages?.addEventListener("click", (event: Event) => {
+      const button = (event.target as HTMLElement).closest?.(
+        ".zoteroai-code-copy",
+      ) as HTMLButtonElement | null;
+      if (!button) return;
+      const code =
+        button.closest(".zoteroai-codeblock")?.querySelector("code")
+          ?.textContent || "";
+      this.copyToClipboard(ctx, code);
+      const label = button.textContent || "";
+      button.textContent = getString("message-copied");
+      button.classList.add("zoteroai-copied");
+      setTimeout(() => {
+        button.textContent = label || getString("panel-copy");
+        button.classList.remove("zoteroai-copied");
+      }, 1500);
+    });
     $(".zoteroai-scroll-bottom")?.addEventListener("click", () => {
       messages?.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
     });
@@ -1002,6 +1019,11 @@ export class ChatPanel {
       `zoteroai-msg zoteroai-msg-${message.role}`,
     );
     element.dataset.messageId = message.id;
+    if (message.role === "assistant" && message.reasoning) {
+      element.appendChild(
+        this.createReasoningPanel(ctx, message.reasoning).wrap,
+      );
+    }
     const content = this.el(ctx.doc, "div", "zoteroai-msg-content");
     if (message.role === "assistant")
       this.renderMarkdown(ctx, content, message.content);
@@ -1126,10 +1148,7 @@ export class ChatPanel {
     content: string,
     button: HTMLButtonElement,
   ) {
-    const win = ctx.doc.defaultView as any;
-    const utility =
-      win?.Zotero?.Utilities?.Internal || Zotero.Utilities.Internal;
-    utility.copyTextToClipboard(content);
+    this.copyToClipboard(ctx, content);
     const live = ctx.body.querySelector(".zoteroai-live-region") as HTMLElement;
     live.textContent = getString("message-copied");
     button.classList.add("zoteroai-success");
@@ -1139,6 +1158,55 @@ export class ChatPanel {
       button.title = getString("panel-copy");
       live.textContent = "";
     }, 1500);
+  }
+
+  private copyToClipboard(ctx: PanelContext, text: string) {
+    const win = ctx.doc.defaultView as any;
+    const utility =
+      win?.Zotero?.Utilities?.Internal || Zotero.Utilities.Internal;
+    utility.copyTextToClipboard(text);
+  }
+
+  /**
+   * Build a collapsible chain-of-thought panel (Gemini-style "Thinking…"
+   * section). Expanded while reasoning streams, collapsed after the answer
+   * begins; the toggle flips its label between show/hide.
+   */
+  private createReasoningPanel(
+    ctx: PanelContext,
+    initialText = "",
+  ): {
+    wrap: HTMLElement;
+    body: HTMLElement;
+    label: HTMLElement;
+    toggle: HTMLElement;
+  } {
+    const wrap = this.el(ctx.doc, "div", "zoteroai-reasoning");
+    const toggle = this.el(
+      ctx.doc,
+      "button",
+      "zoteroai-reasoning-toggle",
+    ) as HTMLButtonElement;
+    toggle.type = "button";
+    const label = this.el(ctx.doc, "span");
+    toggle.appendChild(label);
+    toggle.appendChild(this.icon(ctx.doc, "down"));
+    const body = this.el(ctx.doc, "div", "zoteroai-reasoning-body");
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    if (initialText) body.textContent = initialText;
+    const refresh = () => {
+      const open = wrap.classList.contains("zoteroai-reasoning-expanded");
+      label.textContent = getString(open ? "reasoning-hide" : "reasoning-show");
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.title = label.textContent;
+    };
+    toggle.addEventListener("click", () => {
+      wrap.classList.toggle("zoteroai-reasoning-expanded");
+      refresh();
+    });
+    refresh();
+    return { wrap, body, label, toggle };
   }
 
   private createErrorCard(
@@ -1199,7 +1267,11 @@ export class ChatPanel {
   ) {
     element.innerHTML = "";
     element.appendChild(
-      ctx.doc.createRange().createContextualFragment(renderMarkdownHTML(text)),
+      ctx.doc
+        .createRange()
+        .createContextualFragment(
+          renderMarkdownHTML(text, { copyLabel: getString("panel-copy") }),
+        ),
     );
   }
 
@@ -1274,7 +1346,10 @@ export class ChatPanel {
       let streamed = "";
       let reasoning = "";
       let responseElement: HTMLElement | null = null;
-      let reasoningElement: HTMLElement | null = null;
+      let reasoningWrap: HTMLElement | null = null;
+      let reasoningBody: HTMLElement | null = null;
+      let reasoningToggle: HTMLElement | null = null;
+      let reasoningLabel: HTMLElement | null = null;
       let renderScheduled = false;
       const container = ctx.body.querySelector(
         ".zoteroai-messages",
@@ -1288,8 +1363,15 @@ export class ChatPanel {
           this.generation.phase = "streaming";
           streamed += delta;
           container.querySelector(".zoteroai-pending")?.remove();
-          reasoningElement?.remove();
-          reasoningElement = null;
+          // The answer is arriving: collapse the thinking panel.
+          if (
+            reasoningWrap?.classList.contains("zoteroai-reasoning-expanded")
+          ) {
+            reasoningWrap.classList.remove("zoteroai-reasoning-expanded");
+            reasoningToggle?.setAttribute("aria-expanded", "false");
+            if (reasoningLabel)
+              reasoningLabel.textContent = getString("reasoning-show");
+          }
           if (!responseElement) {
             responseElement = this.el(
               ctx.doc,
@@ -1321,22 +1403,36 @@ export class ChatPanel {
         onReasoning: (delta) => {
           reasoning += delta;
           container.querySelector(".zoteroai-pending")?.remove();
-          if (!reasoningElement) {
-            reasoningElement = this.el(
-              ctx.doc,
-              "div",
-              "zoteroai-msg-reasoning",
-            );
-            container.appendChild(reasoningElement);
+          if (!reasoningWrap) {
+            const panel = this.createReasoningPanel(ctx);
+            reasoningWrap = panel.wrap;
+            reasoningBody = panel.body;
+            reasoningToggle = panel.toggle;
+            reasoningLabel = panel.label;
+            reasoningWrap.classList.add("zoteroai-reasoning-expanded");
+            reasoningLabel.textContent = getString("reasoning-thinking");
+            reasoningToggle.setAttribute("aria-expanded", "true");
+            container.appendChild(reasoningWrap);
           }
-          reasoningElement.textContent = reasoning;
+          if (reasoningBody) reasoningBody.textContent = reasoning;
+          if (this.isNearBottom(container))
+            container.scrollTop = container.scrollHeight;
         },
         onDone: () => {
-          this.chatManager.setLastAssistant(convID, streamed);
+          this.chatManager.setLastAssistant(
+            convID,
+            streamed,
+            reasoning || undefined,
+          );
           void this.generateConversationTitle(convID);
         },
         onError: (message) => {
-          if (streamed) this.chatManager.setLastAssistant(convID, streamed);
+          if (streamed)
+            this.chatManager.setLastAssistant(
+              convID,
+              streamed,
+              reasoning || undefined,
+            );
           this.chatManager.setError(convID, message);
         },
       });

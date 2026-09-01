@@ -1,11 +1,22 @@
 /**
  * A small, dependency-free Markdown-to-HTML renderer for the chat panel.
  * It covers the subset the model is asked to use: headings, fenced/inline
- * code, tables, ordered/unordered lists, blockquotes, horizontal rules and
- * inline emphasis/links. Output is XHTML-safe (attributes are URL-quoted and
- * every structural element is emitted as a complete block so downstream lines
- * are never re-wrapped).
+ * code, tables, ordered/unordered lists (including nesting), blockquotes,
+ * horizontal rules and inline emphasis/links. Output is XHTML-safe (attribute
+ * URLs are quoted, content is escaped) and every structural element is emitted
+ * as a complete block so downstream lines are never re-wrapped.
  */
+
+interface MarkdownOptions {
+  /** Text for the "copy" affordance on fenced code blocks. */
+  copyLabel?: string;
+}
+
+interface ListItem {
+  indent: number;
+  ordered: boolean;
+  content: string;
+}
 
 function escapeHtml(text: string): string {
   return text
@@ -27,6 +38,31 @@ function renderInline(text: string): string {
     );
 }
 
+function codeBlock(code: string, copyLabel: string): string {
+  return (
+    `<div class="zoteroai-codeblock">` +
+    `<button type="button" class="zoteroai-code-copy">${copyLabel}</button>` +
+    `<pre><code>${code}</code></pre>` +
+    `</div>`
+  );
+}
+
+/** Parse a |---|:---:|---:| separator row into per-cell alignment. */
+function parseAlignment(separator: string): Array<"left" | "center" | "right"> {
+  return separator
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => {
+      const c = cell.trim();
+      const left = c.startsWith(":");
+      const right = c.endsWith(":");
+      if (left && right) return "center";
+      if (right) return "right";
+      return "left";
+    });
+}
+
 function renderTable(rows: string[]): string {
   const parsed = rows.map((row) =>
     row
@@ -35,29 +71,56 @@ function renderTable(rows: string[]): string {
       .split("|")
       .map((cell) => renderInline(cell.trim())),
   );
-  if (!parsed.length) return "";
-  const [header, , ...body] = parsed; // skip the |---|---| separator
-  const head = `<tr>${header.map((cell) => `<th>${cell}</th>`).join("")}</tr>`;
+  if (parsed.length < 2) return "";
+  const header = parsed[0];
+  const body = parsed.slice(2);
+  const align = parseAlignment(rows[1]);
+  const cell = (html: string, i: number, tag: string) => {
+    const style =
+      align[i] && align[i] !== "left" ? ` style="text-align:${align[i]}"` : "";
+    return `<${tag}${style}>${html}</${tag}>`;
+  };
+  const head = `<tr>${header.map((h, i) => cell(h, i, "th")).join("")}</tr>`;
   const rowsHTML = body
-    .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
+    .map((row) => `<tr>${row.map((c, i) => cell(c, i, "td")).join("")}</tr>`)
     .join("");
   return `<table><thead>${head}</thead><tbody>${rowsHTML}</tbody></table>`;
 }
 
-export function renderMarkdownHTML(text: string): string {
+/** Render a contiguous block of list items with arbitrary nesting depth. */
+function renderListBlock(items: ListItem[]): string {
+  if (!items.length) return "";
+  const root = items[0].ordered ? "ol" : "ul";
+  let html = "";
+  let i = 0;
+  while (i < items.length) {
+    const { indent, content } = items[i];
+    html += `<li>${renderInline(content)}`;
+    // Collect deeper items that belong to this <li>
+    const children: ListItem[] = [];
+    let j = i + 1;
+    while (j < items.length && items[j].indent > indent) {
+      children.push(items[j]);
+      j++;
+    }
+    if (children.length) html += renderListBlock(children);
+    html += `</li>`;
+    i = j;
+  }
+  return `<${root}>${html}</${root}>`;
+}
+
+export function renderMarkdownHTML(
+  text: string,
+  options: MarkdownOptions = {},
+): string {
+  const copyLabel = options.copyLabel || "Copy";
   const lines = text.split("\n");
   const out: string[] = [];
   let inCode = false;
   let codeBuf: string[] = [];
-  let listType: "ul" | "ol" | null = null;
   let quoteBuf: string[] = [];
 
-  const closeList = () => {
-    if (listType) {
-      out.push(`</${listType}>`);
-      listType = null;
-    }
-  };
   const closeQuote = () => {
     if (quoteBuf.length) {
       out.push(
@@ -73,11 +136,10 @@ export function renderMarkdownHTML(text: string): string {
 
     if (/^```/.test(line)) {
       if (inCode) {
-        out.push(`<pre><code>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+        out.push(codeBlock(escapeHtml(codeBuf.join("\n")), copyLabel));
         codeBuf = [];
         inCode = false;
       } else {
-        closeList();
         closeQuote();
         inCode = true;
       }
@@ -88,18 +150,16 @@ export function renderMarkdownHTML(text: string): string {
       continue;
     }
     if (!line) {
-      closeList();
       closeQuote();
       continue;
     }
 
-    // Table: header followed by a separator row of |---|:---:|---|
+    // Table: header followed by a separator row of |---|:---:|---:|
     if (
       /^\|.*\|$/.test(line) &&
       i + 1 < lines.length &&
       /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())
     ) {
-      closeList();
       closeQuote();
       const tableRows: string[] = [line];
       while (i + 1 < lines.length && /^\|.*\|$/.test(lines[i + 1].trim())) {
@@ -112,7 +172,6 @@ export function renderMarkdownHTML(text: string): string {
 
     const heading = line.match(/^(#{1,4})\s+(.*)$/);
     if (heading) {
-      closeList();
       closeQuote();
       const level = Math.min(4, heading[1].length + 1);
       out.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
@@ -120,7 +179,6 @@ export function renderMarkdownHTML(text: string): string {
     }
 
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
-      closeList();
       closeQuote();
       out.push("<hr>");
       continue;
@@ -128,35 +186,38 @@ export function renderMarkdownHTML(text: string): string {
 
     const quote = raw.match(/^\s*>\s?(.*)$/);
     if (quote) {
-      closeList();
       quoteBuf.push(quote[1]);
       continue;
     }
 
-    const unordered = line.match(/^\s*[-*+]\s+(.*)$/);
-    const ordered = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    if (unordered || ordered) {
+    // Lists (ordered / unordered) with indentation-aware nesting.
+    const listMatch = raw.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if (listMatch) {
       closeQuote();
-      const type: "ul" | "ol" = unordered ? "ul" : "ol";
-      if (listType !== type) {
-        closeList();
-        out.push(`<${type}>`);
-        listType = type;
+      const block: ListItem[] = [];
+      let j = i;
+      while (j < lines.length) {
+        const m = lines[j].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        if (!m) break;
+        block.push({
+          indent: m[1].replace(/\t/g, "  ").length,
+          ordered: /^\d/.test(m[2]),
+          content: m[3],
+        });
+        j++;
       }
-      const content = unordered ? unordered[1] : ordered![1];
-      out.push(`<li>${renderInline(content)}</li>`);
+      i = j - 1;
+      out.push(renderListBlock(block));
       continue;
     }
 
-    closeList();
     closeQuote();
     out.push(`<p>${renderInline(line)}</p>`);
   }
 
   if (inCode && codeBuf.length) {
-    out.push(`<pre><code>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+    out.push(codeBlock(escapeHtml(codeBuf.join("\n")), copyLabel));
   }
-  closeList();
   closeQuote();
   return out.join("\n");
 }

@@ -54,3 +54,6 @@ status-streaming = 正在生成
 prompts-title = 预设提示词
 prompts-open = 打开预设提示词
 action-generation-busy = 请先停止当前生成任务，再执行此操作。
+reasoning-thinking = 思考中…
+reasoning-show = 展开思考过程
+reasoning-hide = 收起思考过程

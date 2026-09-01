@@ -54,3 +54,6 @@ status-streaming = Generating
 prompts-title = Prompt presets
 prompts-open = Open prompt presets
 action-generation-busy = Stop the current generation before doing this.
+reasoning-thinking = Thinking…
+reasoning-show = Show thinking
+reasoning-hide = Hide thinking

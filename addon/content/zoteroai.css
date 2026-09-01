@@ -671,6 +671,57 @@
   white-space: pre;
 }
 
+/* Fenced code block with a copy affordance */
+.zoteroai-codeblock {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+.zoteroai-codeblock pre {
+  margin: 0;
+}
+
+.zoteroai-codeblock code {
+  display: block;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.zoteroai-code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--zai-surface) 82%, transparent);
+  color: var(--zai-muted);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.14s var(--zai-ease),
+    background-color 0.14s var(--zai-ease),
+    color 0.14s var(--zai-ease);
+}
+
+.zoteroai-codeblock:hover .zoteroai-code-copy,
+.zoteroai-code-copy:focus-visible,
+.zoteroai-code-copy.zoteroai-copied {
+  opacity: 1;
+}
+
+.zoteroai-code-copy:hover {
+  background: var(--zai-surface-high);
+  color: var(--zai-text);
+}
+
+.zoteroai-code-copy.zoteroai-copied {
+  color: var(--zai-success);
+}
+
 .zoteroai-msg-content table {
   display: block;
   max-width: 100%;
@@ -755,15 +806,68 @@
   }
 }
 
-.zoteroai-msg-reasoning {
-  max-height: 150px;
-  overflow: auto;
-  padding-left: 10px;
-  border-left: 2px solid var(--zai-outline);
+/* Collapsible chain-of-thought / reasoning panel */
+.zoteroai-reasoning {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  flex-direction: column;
+  margin-bottom: 6px;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 55%, transparent);
+  border-radius: var(--zai-radius-m);
+  background: var(--zai-surface-low);
+}
+
+.zoteroai-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--zai-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.14s var(--zai-ease);
+}
+
+.zoteroai-reasoning-toggle:hover {
+  color: var(--zai-text);
+}
+
+.zoteroai-reasoning-toggle .zoteroai-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.18s var(--zai-ease);
+}
+
+.zoteroai-reasoning-body {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 10px;
   color: var(--zai-muted);
   font-size: 12px;
   font-style: italic;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   white-space: pre-wrap;
+  transition: max-height 0.22s var(--zai-ease);
+}
+
+.zoteroai-reasoning.zoteroai-reasoning-expanded .zoteroai-reasoning-body {
+  max-height: 240px;
+  padding: 0 10px 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.zoteroai-reasoning.zoteroai-reasoning-expanded
+  .zoteroai-reasoning-toggle
+  .zoteroai-icon {
+  transform: rotate(180deg);
 }
 
 .zoteroai-pending {

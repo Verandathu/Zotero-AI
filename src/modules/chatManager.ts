@@ -6,6 +6,8 @@ export interface ConversationMessage {
   id: string;
   role: ConversationMessageRole;
   content: string;
+  /** Optional chain-of-thought produced by reasoning models (not sent back). */
+  reasoning?: string;
   createdAt: number;
 }
 
@@ -62,6 +64,9 @@ export function normalizeConversationRecord(
           typeof message.id === "string" ? message.id : `${value.id}-m${index}`,
         role: message.role,
         content: message.content,
+        ...(typeof message.reasoning === "string"
+          ? { reasoning: message.reasoning }
+          : {}),
         createdAt: Number(message.createdAt) || createdAt + index,
       }),
     );
@@ -288,15 +293,19 @@ export class ChatManager {
     this.scheduleSave();
   }
 
-  setLastAssistant(convID: string, text: string) {
+  setLastAssistant(convID: string, text: string, reasoning?: string) {
     const conversation = this.find(convID);
     if (!conversation) {
       return;
     }
     const last = conversation.messages[conversation.messages.length - 1];
     if (last?.role === "assistant") {
-      if (last.content !== text) {
+      if (
+        last.content !== text ||
+        (reasoning !== undefined && last.reasoning !== reasoning)
+      ) {
         last.content = text;
+        if (reasoning !== undefined) last.reasoning = reasoning;
         conversation.updatedAt = Date.now();
         this.scheduleSave();
       }
@@ -305,6 +314,7 @@ export class ChatManager {
         id: makeID("m"),
         role: "assistant",
         content: text,
+        ...(reasoning !== undefined ? { reasoning } : {}),
         createdAt: Date.now(),
       });
       conversation.updatedAt = Date.now();

@@ -48,4 +48,20 @@ describe("markdown renderer", function () {
     assert.include(html, "&lt;script&gt;");
     assert.notInclude(html, 'href="https://a.com/"');
   });
+
+  it("nests indented lists", function () {
+    const html = renderMarkdownHTML("- a\n  - a1\n  - a2\n- b");
+    assert.include(html, "<li>a<ul><li>a1</li><li>a2</li></ul></li>");
+    assert.include(html, "<li>b</li>");
+  });
+
+  it("aligns table cells via separator colons", function () {
+    const html = renderMarkdownHTML("| A | B |\n|:--|--:|\n| 1 | 2 |");
+    assert.include(html, '<th style="text-align:right">B</th>');
+  });
+
+  it("wraps fenced code with a copy button", function () {
+    const html = renderMarkdownHTML("```\ncode\n```", { copyLabel: "复制" });
+    assert.include(html, 'class="zoteroai-code-copy">复制</button>');
+  });
 });
