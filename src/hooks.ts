@@ -17,8 +17,11 @@ function registerStylesheet() {
   styleSheetURI = Services.io.newURI(
     `chrome://${addon.data.config.addonRef}/content/zoteroai.css`,
   );
-  if (!sss.sheetRegistered(styleSheetURI, sss.AGENT_SHEET)) {
-    sss.loadAndRegisterSheet(styleSheetURI, sss.AGENT_SHEET);
+  // Register at USER origin (not AGENT) so these rules outrank Zotero's own
+  // author-origin stylesheets — otherwise Zotero's defaults (padding, line
+  // height, box sizing on inputs/buttons) override the chat panel layout.
+  if (!sss.sheetRegistered(styleSheetURI, sss.USER_SHEET)) {
+    sss.loadAndRegisterSheet(styleSheetURI, sss.USER_SHEET);
   }
 }
 
@@ -29,8 +32,8 @@ function unregisterStylesheet() {
   const sss = (Components as any).classes[
     "@mozilla.org/content/style-sheet-service;1"
   ].getService(Components.interfaces.nsIStyleSheetService);
-  if (sss.sheetRegistered(styleSheetURI, sss.AGENT_SHEET)) {
-    sss.unregisterSheet(styleSheetURI, sss.AGENT_SHEET);
+  if (sss.sheetRegistered(styleSheetURI, sss.USER_SHEET)) {
+    sss.unregisterSheet(styleSheetURI, sss.USER_SHEET);
   }
   styleSheetURI = undefined;
 }
