@@ -17,9 +17,10 @@ function registerStylesheet() {
   styleSheetURI = Services.io.newURI(
     `chrome://${addon.data.config.addonRef}/content/zoteroai.css`,
   );
-  // Register at USER origin (not AGENT) so these rules outrank Zotero's own
-  // author-origin stylesheets — otherwise Zotero's defaults (padding, line
-  // height, box sizing on inputs/buttons) override the chat panel layout.
+  // Register at USER origin so the `!important` declarations in zoteroai.css
+  // outrank Zotero's own author-origin element rules (textarea/button/input
+  // padding, line-height, box sizing). Plain user-origin rules alone still
+  // lose to author-origin normal rules — `!important` is what wins the cascade.
   if (!sss.sheetRegistered(styleSheetURI, sss.USER_SHEET)) {
     sss.loadAndRegisterSheet(styleSheetURI, sss.USER_SHEET);
   }

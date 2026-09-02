@@ -1,340 +1,344 @@
 /* Zotero AI — Gemini structure with ChatGPT-style interaction feedback */
 .zoteroai-root {
-  --zai-primary: #0b57d0;
-  --zai-primary-soft: #d3e3fd;
-  --zai-on-primary-soft: #0842a0;
-  --zai-surface: #fff;
-  --zai-surface-low: #f8fafd;
-  --zai-surface-mid: #f0f4f9;
-  --zai-surface-high: #e9eef6;
-  --zai-text: #1f1f1f;
-  --zai-muted: #5f6368;
-  --zai-outline: #c7cdd4;
-  --zai-error: #b3261e;
-  --zai-warning: #a15c00;
-  --zai-success: #137333;
-  --zai-hover: rgb(60 64 67 / 8%);
-  --zai-pressed: rgb(60 64 67 / 14%);
-  --zai-radius-s: 8px;
-  --zai-radius-m: 12px;
-  --zai-radius-l: 18px;
-  --zai-radius-xl: 26px;
-  --zai-ease: cubic-bezier(0.2, 0, 0, 1);
+  --zai-primary: #0b57d0 !important;
+  --zai-primary-soft: #d3e3fd !important;
+  --zai-on-primary-soft: #0842a0 !important;
+  --zai-surface: #fff !important;
+  --zai-surface-low: #f8fafd !important;
+  --zai-surface-mid: #f0f4f9 !important;
+  --zai-surface-high: #e9eef6 !important;
+  --zai-text: #1f1f1f !important;
+  --zai-muted: #5f6368 !important;
+  --zai-outline: #c7cdd4 !important;
+  --zai-error: #b3261e !important;
+  --zai-warning: #a15c00 !important;
+  --zai-success: #137333 !important;
+  --zai-hover: rgb(60 64 67 / 8%) !important;
+  --zai-pressed: rgb(60 64 67 / 14%) !important;
+  --zai-radius-s: 8px !important;
+  --zai-radius-m: 12px !important;
+  --zai-radius-l: 18px !important;
+  --zai-radius-xl: 26px !important;
+  --zai-ease: cubic-bezier(0.2, 0, 0, 1) !important;
 
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
   padding: 0 !important;
-  background: var(--zai-surface);
-  color: var(--zai-text);
+  background: var(--zai-surface) !important;
+  color: var(--zai-text) !important;
   font-family:
     system-ui,
     -apple-system,
     "Segoe UI",
-    sans-serif;
-  font-size: 13px;
-  line-height: 1.55;
+    sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
   -moz-user-select: text !important;
   user-select: text !important;
 }
 
 .zoteroai-root * {
-  box-sizing: border-box;
+  box-sizing: border-box !important;
 }
 
 .zoteroai-root button,
 .zoteroai-root input,
 .zoteroai-root textarea {
-  font: inherit;
+  font: inherit !important;
 }
 
 .zoteroai-root button {
-  color: inherit;
-  -moz-user-select: none;
-  user-select: none;
+  color: inherit !important;
+  -moz-user-select: none !important;
+  user-select: none !important;
 }
 
 .zoteroai-root button:focus-visible,
 .zoteroai-root input:focus-visible,
 .zoteroai-root textarea:focus-visible {
-  outline: 2px solid var(--zai-primary);
-  outline-offset: 2px;
+  outline: 2px solid var(--zai-primary) !important;
+  outline-offset: 2px !important;
 }
 
 @media (prefers-color-scheme: dark) {
   .zoteroai-root {
-    --zai-primary: #a8c7fa;
-    --zai-primary-soft: #1f3a5f;
-    --zai-on-primary-soft: #d3e3fd;
-    --zai-surface: #1e1f20;
-    --zai-surface-low: #242628;
-    --zai-surface-mid: #282a2c;
-    --zai-surface-high: #333537;
-    --zai-text: #e3e3e3;
-    --zai-muted: #bdc1c6;
-    --zai-outline: #4c5157;
-    --zai-error: #f2b8b5;
-    --zai-warning: #ffb95c;
-    --zai-success: #81c995;
-    --zai-hover: rgb(232 234 237 / 9%);
-    --zai-pressed: rgb(232 234 237 / 16%);
+    --zai-primary: #a8c7fa !important;
+    --zai-primary-soft: #1f3a5f !important;
+    --zai-on-primary-soft: #d3e3fd !important;
+    --zai-surface: #1e1f20 !important;
+    --zai-surface-low: #242628 !important;
+    --zai-surface-mid: #282a2c !important;
+    --zai-surface-high: #333537 !important;
+    --zai-text: #e3e3e3 !important;
+    --zai-muted: #bdc1c6 !important;
+    --zai-outline: #4c5157 !important;
+    --zai-error: #f2b8b5 !important;
+    --zai-warning: #ffb95c !important;
+    --zai-success: #81c995 !important;
+    --zai-hover: rgb(232 234 237 / 9%) !important;
+    --zai-pressed: rgb(232 234 237 / 16%) !important;
   }
 }
 
 /* Icons and common controls */
 .zoteroai-icon {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  pointer-events: none;
+  display: inline-flex !important;
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 auto !important;
+  pointer-events: none !important;
 }
 
 .zoteroai-icon svg {
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .zoteroai-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--zai-muted);
-  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  flex: 0 0 auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--zai-muted) !important;
+  cursor: pointer !important;
   transition:
     background-color 0.16s var(--zai-ease),
     color 0.16s var(--zai-ease),
     transform 0.1s var(--zai-ease),
-    box-shadow 0.16s var(--zai-ease);
+    box-shadow 0.16s var(--zai-ease) !important;
 }
 
 .zoteroai-icon-btn:hover {
-  background: var(--zai-hover);
-  color: var(--zai-text);
+  background: var(--zai-hover) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-icon-btn:active {
-  background: var(--zai-pressed);
-  transform: scale(0.94);
+  background: var(--zai-pressed) !important;
+  transform: scale(0.94) !important;
 }
 
 .zoteroai-icon-btn:disabled {
-  cursor: default;
-  opacity: 0.38;
+  cursor: default !important;
+  opacity: 0.38 !important;
 }
 
 /* Header */
 .zoteroai-header {
-  width: 100%;
-  max-width: 100%;
-  flex: 0 0 auto;
-  padding: 8px clamp(16px, 5%, 26px) 6px;
-  background: color-mix(in srgb, var(--zai-surface) 94%, transparent);
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  padding: 8px clamp(16px, 5%, 26px) 6px !important;
+  background: color-mix(
+    in srgb,
+    var(--zai-surface) 94%,
+    transparent
+  ) !important;
   border-bottom: 1px solid
-    color-mix(in srgb, var(--zai-outline) 65%, transparent);
+    color-mix(in srgb, var(--zai-outline) 65%, transparent) !important;
 }
 
 .zoteroai-topbar,
 .zoteroai-context-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
 }
 
 .zoteroai-topbar {
-  gap: 6px;
-  min-height: 38px;
+  gap: 6px !important;
+  min-height: 38px !important;
 }
 
 .zoteroai-conversation-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: left;
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  text-align: left !important;
 }
 
 .zoteroai-context-row {
-  gap: 6px;
-  margin-top: 2px;
+  gap: 6px !important;
+  margin-top: 2px !important;
 }
 
 .zoteroai-context-badge,
 .zoteroai-toggle-pill {
-  min-width: 0;
-  height: 26px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--zai-surface-mid);
-  color: var(--zai-muted);
-  font-size: 11px;
+  min-width: 0 !important;
+  height: 26px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--zai-surface-mid) !important;
+  color: var(--zai-muted) !important;
+  font-size: 11px !important;
 }
 
 .zoteroai-context-badge {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  padding: 0 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 !important;
+  padding: 0 10px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: left !important;
 }
 
 .zoteroai-context-badge[data-empty="true"] {
-  font-style: italic;
+  font-style: italic !important;
 }
 
 .zoteroai-toggle-pill {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 60%, transparent);
-  background: var(--zai-surface);
-  cursor: pointer;
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
+  padding: 0 10px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 60%, transparent) !important;
+  background: var(--zai-surface) !important;
+  cursor: pointer !important;
   transition:
     background-color 0.16s var(--zai-ease),
     border-color 0.16s var(--zai-ease),
     color 0.16s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-toggle-pill::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--zai-outline);
+  content: "" !important;
+  width: 8px !important;
+  height: 8px !important;
+  flex: 0 0 auto !important;
+  border-radius: 50% !important;
+  background: var(--zai-outline) !important;
   transition:
     background-color 0.16s var(--zai-ease),
-    box-shadow 0.16s var(--zai-ease);
+    box-shadow 0.16s var(--zai-ease) !important;
 }
 
 .zoteroai-toggle-pill:hover {
-  border-color: var(--zai-muted);
-  color: var(--zai-text);
+  border-color: var(--zai-muted) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-toggle-pill:active {
-  transform: scale(0.97);
+  transform: scale(0.97) !important;
 }
 
 .zoteroai-toggle-pill input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
 }
 
 /* Clear, high-contrast ON state so the setting is obvious at a glance */
 .zoteroai-toggle-pill[data-checked="true"],
 .zoteroai-toggle-pill:focus-within {
-  color: #fff;
-  background: var(--zai-primary);
-  border-color: var(--zai-primary);
-  font-weight: 600;
+  color: #fff !important;
+  background: var(--zai-primary) !important;
+  border-color: var(--zai-primary) !important;
+  font-weight: 600 !important;
 }
 
 .zoteroai-toggle-pill[data-checked="true"]::before {
-  background: #fff;
-  box-shadow: 0 0 0 0 var(--zai-primary);
+  background: #fff !important;
+  box-shadow: 0 0 0 0 var(--zai-primary) !important;
 }
 
 .zoteroai-toggle-pill[data-checked="true"]:hover {
-  background: color-mix(in srgb, var(--zai-primary) 88%, #000);
-  border-color: color-mix(in srgb, var(--zai-primary) 88%, #000);
+  background: color-mix(in srgb, var(--zai-primary) 88%, #000) !important;
+  border-color: color-mix(in srgb, var(--zai-primary) 88%, #000) !important;
 }
 
 /* History drawer */
 .zoteroai-history-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 30;
-  background: rgb(20 22 25 / 42%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.22s var(--zai-ease);
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 30 !important;
+  background: rgb(20 22 25 / 42%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.22s var(--zai-ease) !important;
 }
 
 .zoteroai-history-drawer {
-  position: absolute;
-  inset: 0 auto 0 0;
-  z-index: 31;
-  display: flex;
-  width: min(92%, 340px);
-  min-width: min(250px, 92%);
-  flex-direction: column;
-  padding: 12px;
-  border-right: 1px solid var(--zai-outline);
-  background: var(--zai-surface-low);
-  box-shadow: 8px 0 30px rgb(0 0 0 / 18%);
-  visibility: hidden;
-  transform: translateX(-105%);
+  position: absolute !important;
+  inset: 0 auto 0 0 !important;
+  z-index: 31 !important;
+  display: flex !important;
+  width: min(92%, 340px) !important;
+  min-width: min(250px, 92%) !important;
+  flex-direction: column !important;
+  padding: 12px !important;
+  border-right: 1px solid var(--zai-outline) !important;
+  background: var(--zai-surface-low) !important;
+  box-shadow: 8px 0 30px rgb(0 0 0 / 18%) !important;
+  visibility: hidden !important;
+  transform: translateX(-105%) !important;
   transition:
     transform 0.24s var(--zai-ease),
-    visibility 0s linear 0.24s;
+    visibility 0s linear 0.24s !important;
 }
 
 .zoteroai-history-open .zoteroai-history-scrim {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .zoteroai-history-open .zoteroai-history-drawer {
-  visibility: visible;
-  transform: translateX(0);
+  visibility: visible !important;
+  transform: translateX(0) !important;
   transition:
     transform 0.24s var(--zai-ease),
-    visibility 0s;
+    visibility 0s !important;
 }
 
 .zoteroai-history-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 0 0 auto !important;
 }
 
 .zoteroai-history-new {
-  display: flex;
-  height: 38px;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  padding: 0 13px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--zai-primary-soft);
-  color: var(--zai-on-primary-soft);
-  font-weight: 600;
-  cursor: pointer;
+  display: flex !important;
+  height: 38px !important;
+  flex: 1 !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--zai-primary-soft) !important;
+  color: var(--zai-on-primary-soft) !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
   transition:
     background-color 0.16s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-history-new span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .zoteroai-history-new:hover {
@@ -342,236 +346,240 @@
     in srgb,
     var(--zai-primary-soft) 82%,
     var(--zai-primary)
-  );
+  ) !important;
 }
 
 .zoteroai-history-new:active {
-  transform: scale(0.98);
+  transform: scale(0.98) !important;
 }
 
 .zoteroai-history-search-wrap {
-  display: flex;
-  height: 40px;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  margin: 10px 2px 8px;
-  padding: 0 13px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 40%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--zai-surface-mid) 76%, transparent);
-  color: var(--zai-muted);
+  display: flex !important;
+  height: 40px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+  margin: 10px 2px 8px !important;
+  padding: 0 13px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 40%, transparent) !important;
+  border-radius: 999px !important;
+  background: color-mix(
+    in srgb,
+    var(--zai-surface-mid) 76%,
+    transparent
+  ) !important;
+  color: var(--zai-muted) !important;
   transition:
     background-color 0.16s var(--zai-ease),
     box-shadow 0.16s var(--zai-ease),
-    border-color 0.16s var(--zai-ease);
+    border-color 0.16s var(--zai-ease) !important;
 }
 
 .zoteroai-history-search-wrap:focus-within {
-  background: var(--zai-surface);
-  box-shadow: 0 0 0 1.5px var(--zai-primary);
+  background: var(--zai-surface) !important;
+  box-shadow: 0 0 0 1.5px var(--zai-primary) !important;
 }
 
 .zoteroai-history-search {
-  width: 100%;
-  min-width: 0;
-  border: 0;
+  width: 100% !important;
+  min-width: 0 !important;
+  border: 0 !important;
   outline: 0 !important;
-  background: transparent;
-  color: var(--zai-text);
-  appearance: none;
+  background: transparent !important;
+  color: var(--zai-text) !important;
+  appearance: none !important;
   box-shadow: none !important;
 }
 
 .zoteroai-history-filters {
-  position: relative;
-  z-index: 0;
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: 1fr 1fr;
-  gap: 3px;
-  margin: 0 2px 9px;
-  padding: 3px;
-  border-radius: var(--zai-radius-m);
-  background: var(--zai-surface-mid);
+  position: relative !important;
+  z-index: 0 !important;
+  display: grid !important;
+  flex: 0 0 auto !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 3px !important;
+  margin: 0 2px 9px !important;
+  padding: 3px !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: var(--zai-surface-mid) !important;
 }
 
 .zoteroai-history-filter {
-  height: 29px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--zai-muted);
-  font-size: 11px;
-  cursor: pointer;
+  height: 29px !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  color: var(--zai-muted) !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
   transition:
     color 0.15s var(--zai-ease),
     background-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-history-filter:hover:not(.zoteroai-active) {
-  background: var(--zai-hover);
-  color: var(--zai-text);
+  background: var(--zai-hover) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-history-filter:active {
-  transform: scale(0.97);
+  transform: scale(0.97) !important;
 }
 
 .zoteroai-history-filter.zoteroai-active {
-  background: var(--zai-surface);
-  color: var(--zai-text);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 9%);
+  background: var(--zai-surface) !important;
+  color: var(--zai-text) !important;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 9%) !important;
 }
 
 .zoteroai-history-list {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  scrollbar-width: thin;
-  padding: 0 3px 10px;
+  min-height: 0 !important;
+  flex: 1 !important;
+  overflow: auto !important;
+  scrollbar-width: thin !important;
+  padding: 0 3px 10px !important;
 }
 
 .zoteroai-history-group {
-  padding: 10px 9px 4px;
-  color: var(--zai-muted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  padding: 10px 9px 4px !important;
+  color: var(--zai-muted) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
 }
 
 .zoteroai-history-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin: 2px 0;
-  padding: 2px 6px;
-  border-radius: var(--zai-radius-m);
-  transition: background-color 0.15s var(--zai-ease);
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin: 2px 0 !important;
+  padding: 2px 6px !important;
+  border-radius: var(--zai-radius-m) !important;
+  transition: background-color 0.15s var(--zai-ease) !important;
 }
 
 .zoteroai-history-item:hover {
-  background: var(--zai-surface-mid);
+  background: var(--zai-surface-mid) !important;
 }
 
 .zoteroai-history-item.zoteroai-active {
-  background: var(--zai-primary-soft);
+  background: var(--zai-primary-soft) !important;
 }
 
 .zoteroai-history-main {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  padding: 7px 4px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  appearance: none;
-  transition: padding-right 0.16s var(--zai-ease);
+  display: flex !important;
+  min-width: 0 !important;
+  flex: 1 !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  padding: 7px 4px !important;
+  border: 0 !important;
+  background: transparent !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  transition: padding-right 0.16s var(--zai-ease) !important;
 }
 
 .zoteroai-history-item-title,
 .zoteroai-history-item-paper {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .zoteroai-history-item-title {
-  color: var(--zai-text);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.35;
+  color: var(--zai-text) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
 }
 
 .zoteroai-history-item-paper {
-  color: var(--zai-muted);
-  font-size: 11px;
-  line-height: 1.35;
+  color: var(--zai-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
 }
 
 .zoteroai-history-item-actions {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-  display: flex;
-  gap: 1px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  padding: 2px;
-  background: var(--zai-surface-mid);
-  box-shadow: -8px 0 10px -4px var(--zai-surface-mid);
-  transition: opacity 0.14s var(--zai-ease);
+  position: absolute !important;
+  top: 50% !important;
+  right: 4px !important;
+  display: flex !important;
+  gap: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-50%) !important;
+  border-radius: 999px !important;
+  padding: 2px !important;
+  background: var(--zai-surface-mid) !important;
+  box-shadow: -8px 0 10px -4px var(--zai-surface-mid) !important;
+  transition: opacity 0.14s var(--zai-ease) !important;
 }
 
 .zoteroai-history-item.zoteroai-active .zoteroai-history-item-actions {
-  background: var(--zai-primary-soft);
-  box-shadow: -8px 0 10px -4px var(--zai-primary-soft);
+  background: var(--zai-primary-soft) !important;
+  box-shadow: -8px 0 10px -4px var(--zai-primary-soft) !important;
 }
 
 .zoteroai-history-item:hover .zoteroai-history-item-actions,
 .zoteroai-history-item:focus-within .zoteroai-history-item-actions,
 .zoteroai-history-item.zoteroai-active .zoteroai-history-item-actions {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .zoteroai-history-item:hover .zoteroai-history-main,
 .zoteroai-history-item:focus-within .zoteroai-history-main,
 .zoteroai-history-item.zoteroai-active .zoteroai-history-main {
-  padding-right: 66px;
+  padding-right: 66px !important;
 }
 
 .zoteroai-history-item-actions .zoteroai-icon-btn {
-  width: 26px;
-  height: 26px;
+  width: 26px !important;
+  height: 26px !important;
 }
 
 .zoteroai-history-item-actions .zoteroai-icon-btn .zoteroai-icon {
-  width: 15px;
-  height: 15px;
+  width: 15px !important;
+  height: 15px !important;
 }
 
 .zoteroai-history-rename {
-  min-width: 0;
-  flex: 1;
-  margin: 4px;
-  padding: 5px 8px;
-  border: 1px solid var(--zai-primary);
-  border-radius: var(--zai-radius-s);
-  background: var(--zai-surface);
-  color: var(--zai-text);
+  min-width: 0 !important;
+  flex: 1 !important;
+  margin: 4px !important;
+  padding: 5px 8px !important;
+  border: 1px solid var(--zai-primary) !important;
+  border-radius: var(--zai-radius-s) !important;
+  background: var(--zai-surface) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-history-empty {
-  padding: 28px 12px;
-  color: var(--zai-muted);
-  text-align: center;
+  padding: 28px 12px !important;
+  color: var(--zai-muted) !important;
+  text-align: center !important;
 }
 
 /* Conversation */
 .zoteroai-messages {
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 20px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 22px clamp(24px, 8%, 44px) 32px;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  min-height: 0 !important;
+  flex: 1 !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 22px clamp(24px, 8%, 44px) 32px !important;
+  scroll-behavior: smooth !important;
+  scrollbar-width: thin !important;
 }
 
 @keyframes zai-enter {
@@ -584,48 +592,48 @@
 .zoteroai-msg,
 .zoteroai-error-card,
 .zoteroai-pending {
-  animation: zai-enter 0.2s var(--zai-ease) both;
+  animation: zai-enter 0.2s var(--zai-ease) both !important;
 }
 
 .zoteroai-msg {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
 }
 
 .zoteroai-msg-user {
-  align-self: flex-end;
-  width: fit-content;
-  min-width: 0;
-  max-width: min(88%, 560px);
-  padding: 9px 14px 6px;
-  border-radius: 20px 20px 6px 20px;
-  background: var(--zai-surface-high);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  align-self: flex-end !important;
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: min(88%, 560px) !important;
+  padding: 9px 14px 6px !important;
+  border-radius: 20px 20px 6px 20px !important;
+  background: var(--zai-surface-high) !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .zoteroai-msg-user .zoteroai-msg-content {
-  width: auto;
-  max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .zoteroai-msg-assistant {
-  width: 100%;
-  align-self: stretch;
+  width: 100% !important;
+  align-self: stretch !important;
 }
 
 .zoteroai-msg-content {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .zoteroai-msg-content p,
@@ -633,171 +641,180 @@
 .zoteroai-msg-content a,
 .zoteroai-msg-content td,
 .zoteroai-msg-content th {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .zoteroai-msg-content > :first-child {
-  margin-top: 0;
+  margin-top: 0 !important;
 }
 
 .zoteroai-msg-content > :last-child {
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
 }
 
 .zoteroai-msg-content p,
 .zoteroai-msg-content ul,
 .zoteroai-msg-content ol {
-  margin: 6px 0;
+  margin: 6px 0 !important;
 }
 
 .zoteroai-msg-content h2,
 .zoteroai-msg-content h3,
 .zoteroai-msg-content h4 {
-  margin: 13px 0 5px;
-  line-height: 1.3;
+  margin: 13px 0 5px !important;
+  line-height: 1.3 !important;
 }
 
 .zoteroai-msg-content pre,
 .zoteroai-error-card pre {
-  width: 100%;
-  max-width: 100%;
-  overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 70%, transparent);
-  border-radius: var(--zai-radius-m);
-  background: var(--zai-surface-mid);
-  white-space: pre;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: auto !important;
+  padding: 10px 12px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 70%, transparent) !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: var(--zai-surface-mid) !important;
+  white-space: pre !important;
 }
 
 /* Fenced code block with a copy affordance */
 .zoteroai-codeblock {
-  position: relative;
-  width: 100%;
-  max-width: 100%;
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .zoteroai-codeblock pre {
-  margin: 0;
+  margin: 0 !important;
 }
 
 .zoteroai-codeblock code {
-  display: block;
-  overflow-wrap: normal;
-  white-space: pre;
+  display: block !important;
+  overflow-wrap: normal !important;
+  white-space: pre !important;
 }
 
 .zoteroai-code-copy {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 1;
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--zai-surface) 82%, transparent);
-  color: var(--zai-muted);
-  font-size: 10px;
-  cursor: pointer;
-  opacity: 0;
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  z-index: 1 !important;
+  padding: 3px 8px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: color-mix(
+    in srgb,
+    var(--zai-surface) 82%,
+    transparent
+  ) !important;
+  color: var(--zai-muted) !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
   transition:
     opacity 0.14s var(--zai-ease),
     background-color 0.14s var(--zai-ease),
-    color 0.14s var(--zai-ease);
+    color 0.14s var(--zai-ease) !important;
 }
 
 .zoteroai-codeblock:hover .zoteroai-code-copy,
 .zoteroai-code-copy:focus-visible,
 .zoteroai-code-copy.zoteroai-copied {
-  opacity: 1;
+  opacity: 1 !important;
 }
 
 .zoteroai-code-copy:hover {
-  background: var(--zai-surface-high);
-  color: var(--zai-text);
+  background: var(--zai-surface-high) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-code-copy.zoteroai-copied {
-  color: var(--zai-success);
+  color: var(--zai-success) !important;
 }
 
 .zoteroai-msg-content table {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin: 9px 0;
-  font-size: 12px;
+  display: block !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  border-collapse: collapse !important;
+  margin: 9px 0 !important;
+  font-size: 12px !important;
 }
 
 .zoteroai-msg-content th,
 .zoteroai-msg-content td {
-  padding: 6px 8px;
-  border: 1px solid var(--zai-outline);
-  text-align: left;
+  padding: 6px 8px !important;
+  border: 1px solid var(--zai-outline) !important;
+  text-align: left !important;
 }
 
 .zoteroai-msg-content th {
-  background: var(--zai-surface-mid);
-  font-weight: 600;
+  background: var(--zai-surface-mid) !important;
+  font-weight: 600 !important;
 }
 
 .zoteroai-msg-content code {
-  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  font-size: 0.92em;
-  overflow-wrap: anywhere;
+  font-family:
+    "Cascadia Code", "SFMono-Regular", Consolas, monospace !important;
+  font-size: 0.92em !important;
+  overflow-wrap: anywhere !important;
 }
 
 .zoteroai-msg-content :not(pre) > code {
-  padding: 1px 4px;
-  border-radius: 5px;
-  background: var(--zai-surface-mid);
+  padding: 1px 4px !important;
+  border-radius: 5px !important;
+  background: var(--zai-surface-mid) !important;
 }
 
 .zoteroai-msg-footer {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-  min-height: 26px;
-  margin-top: 4px;
-  line-height: 0;
+  display: flex !important;
+  gap: 2px !important;
+  align-items: center !important;
+  min-height: 26px !important;
+  margin-top: 4px !important;
+  line-height: 0 !important;
 }
 
 .zoteroai-msg-user .zoteroai-msg-footer {
-  justify-content: flex-end;
-  margin-right: -5px;
-  margin-left: -5px;
+  justify-content: flex-end !important;
+  margin-right: -5px !important;
+  margin-left: -5px !important;
 }
 
 .zoteroai-msg-footer .zoteroai-icon-btn {
-  display: inline-flex;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  opacity: 0.6;
+  display: inline-flex !important;
+  width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  opacity: 0.6 !important;
 }
 
 .zoteroai-msg-footer .zoteroai-icon-btn .zoteroai-icon {
-  width: 16px;
-  height: 16px;
+  width: 16px !important;
+  height: 16px !important;
 }
 
 .zoteroai-msg-footer .zoteroai-icon-btn:hover,
 .zoteroai-msg-footer .zoteroai-icon-btn:focus-visible {
-  opacity: 1;
-  background: var(--zai-hover);
+  opacity: 1 !important;
+  background: var(--zai-hover) !important;
 }
 
 .zoteroai-msg-footer .zoteroai-success {
-  color: var(--zai-success);
-  background: color-mix(in srgb, var(--zai-success) 14%, transparent);
+  color: var(--zai-success) !important;
+  background: color-mix(
+    in srgb,
+    var(--zai-success) 14%,
+    transparent
+  ) !important;
 }
 
 .zoteroai-streaming::after {
-  content: "▍";
-  color: var(--zai-primary);
-  animation: zai-caret 0.9s steps(2) infinite;
+  content: "▍" !important;
+  color: var(--zai-primary) !important;
+  animation: zai-caret 0.9s steps(2) infinite !important;
 }
 
 @keyframes zai-caret {
@@ -808,98 +825,98 @@
 
 /* Collapsible chain-of-thought / reasoning panel */
 .zoteroai-reasoning {
-  display: flex;
-  width: 100%;
-  max-width: 100%;
-  flex-direction: column;
-  margin-bottom: 6px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 55%, transparent);
-  border-radius: var(--zai-radius-m);
-  background: var(--zai-surface-low);
+  display: flex !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  flex-direction: column !important;
+  margin-bottom: 6px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 55%, transparent) !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: var(--zai-surface-low) !important;
 }
 
 .zoteroai-reasoning-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  color: var(--zai-muted);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.14s var(--zai-ease);
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 10px !important;
+  border: 0 !important;
+  border-radius: inherit !important;
+  background: transparent !important;
+  color: var(--zai-muted) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  text-align: left !important;
+  transition: color 0.14s var(--zai-ease) !important;
 }
 
 .zoteroai-reasoning-toggle:hover {
-  color: var(--zai-text);
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-reasoning-toggle .zoteroai-icon {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.18s var(--zai-ease);
+  width: 14px !important;
+  height: 14px !important;
+  transition: transform 0.18s var(--zai-ease) !important;
 }
 
 .zoteroai-reasoning-body {
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 10px;
-  color: var(--zai-muted);
-  font-size: 12px;
-  font-style: italic;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: pre-wrap;
-  transition: max-height 0.22s var(--zai-ease);
+  max-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 10px !important;
+  color: var(--zai-muted) !important;
+  font-size: 12px !important;
+  font-style: italic !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  transition: max-height 0.22s var(--zai-ease) !important;
 }
 
 .zoteroai-reasoning.zoteroai-reasoning-expanded .zoteroai-reasoning-body {
-  max-height: 240px;
-  padding: 0 10px 10px;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  max-height: 240px !important;
+  padding: 0 10px 10px !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
 }
 
 .zoteroai-reasoning.zoteroai-reasoning-expanded
   .zoteroai-reasoning-toggle
   .zoteroai-icon {
-  transform: rotate(180deg);
+  transform: rotate(180deg) !important;
 }
 
 .zoteroai-pending {
-  display: flex;
-  align-items: center;
-  min-height: 28px;
-  gap: 4px;
-  color: var(--zai-muted);
-  font-size: 12px;
+  display: flex !important;
+  align-items: center !important;
+  min-height: 28px !important;
+  gap: 4px !important;
+  color: var(--zai-muted) !important;
+  font-size: 12px !important;
 }
 
 .zoteroai-thinking-dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 2px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 5px 2px !important;
 }
 
 .zoteroai-thinking-dots span {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--zai-muted);
-  animation: zai-dot 1.2s ease-in-out infinite;
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 999px !important;
+  background: var(--zai-muted) !important;
+  animation: zai-dot 1.2s ease-in-out infinite !important;
 }
 
 .zoteroai-thinking-dots span:nth-child(2) {
-  animation-delay: 0.14s;
+  animation-delay: 0.14s !important;
 }
 
 .zoteroai-thinking-dots span:nth-child(3) {
-  animation-delay: 0.28s;
+  animation-delay: 0.28s !important;
 }
 
 @keyframes zai-dot {
@@ -916,488 +933,500 @@
 }
 
 .zoteroai-error-card {
-  display: grid;
-  gap: 7px;
-  padding: 11px 12px;
-  border: 1px solid color-mix(in srgb, var(--zai-error) 45%, transparent);
-  border-radius: var(--zai-radius-m);
-  background: color-mix(in srgb, var(--zai-error) 7%, var(--zai-surface));
-  color: var(--zai-error);
+  display: grid !important;
+  gap: 7px !important;
+  padding: 11px 12px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-error) 45%, transparent) !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: color-mix(
+    in srgb,
+    var(--zai-error) 7%,
+    var(--zai-surface)
+  ) !important;
+  color: var(--zai-error) !important;
 }
 
 .zoteroai-error-card summary {
-  cursor: pointer;
-  font-size: 11px;
+  cursor: pointer !important;
+  font-size: 11px !important;
 }
 
 .zoteroai-error-card button,
 .zoteroai-edit-actions button {
-  justify-self: start;
-  padding: 5px 11px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--zai-surface-high);
-  cursor: pointer;
+  justify-self: start !important;
+  padding: 5px 11px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--zai-surface-high) !important;
+  cursor: pointer !important;
   transition:
     background-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-error-card button:hover,
 .zoteroai-edit-actions button:hover {
-  background: var(--zai-hover);
+  background: var(--zai-hover) !important;
 }
 
 .zoteroai-error-card button:active,
 .zoteroai-edit-actions button:active {
-  transform: scale(0.97);
+  transform: scale(0.97) !important;
 }
 
 .zoteroai-message-editor {
-  width: min(560px, 100%);
-  min-height: 90px;
-  padding: 10px;
-  border: 1px solid var(--zai-primary);
-  border-radius: var(--zai-radius-m);
-  resize: vertical;
-  background: var(--zai-surface);
-  color: var(--zai-text);
+  width: min(560px, 100%) !important;
+  min-height: 90px !important;
+  padding: 10px !important;
+  border: 1px solid var(--zai-primary) !important;
+  border-radius: var(--zai-radius-m) !important;
+  resize: vertical !important;
+  background: var(--zai-surface) !important;
+  color: var(--zai-text) !important;
 }
 
 .zoteroai-edit-warning {
-  margin-top: 5px;
-  color: var(--zai-warning);
-  font-size: 11px;
+  margin-top: 5px !important;
+  color: var(--zai-warning) !important;
+  font-size: 11px !important;
 }
 
 .zoteroai-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 7px;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  margin-top: 7px !important;
 }
 
 .zoteroai-edit-actions .zoteroai-primary-action {
-  background: var(--zai-primary);
-  color: var(--zai-surface);
+  background: var(--zai-primary) !important;
+  color: var(--zai-surface) !important;
 }
 
 .zoteroai-edit-actions .zoteroai-primary-action:hover {
-  background: color-mix(in srgb, var(--zai-primary) 88%, #000);
+  background: color-mix(in srgb, var(--zai-primary) 88%, #000) !important;
 }
 
 .zoteroai-empty-state {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  margin: auto;
-  padding: 36px 12px;
-  color: var(--zai-muted);
-  text-align: center;
+  display: flex !important;
+  flex: 1 !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  margin: auto !important;
+  padding: 36px 12px !important;
+  color: var(--zai-muted) !important;
+  text-align: center !important;
 }
 
 .zoteroai-empty-icon {
-  color: var(--zai-primary);
-  font-size: 27px;
+  color: var(--zai-primary) !important;
+  font-size: 27px !important;
 }
 
 .zoteroai-empty-greeting {
-  color: var(--zai-text);
-  font-size: 18px;
-  font-weight: 600;
+  color: var(--zai-text) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
 }
 
 .zoteroai-empty-title {
-  max-width: 90%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
+  max-width: 90% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
 }
 
 .zoteroai-suggestion-chips {
-  display: flex;
-  max-width: 100%;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 14px;
+  display: flex !important;
+  max-width: 100% !important;
+  flex-wrap: wrap !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  margin-top: 14px !important;
 }
 
 .zoteroai-suggestion-chip {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 80%, transparent);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--zai-text);
-  font-size: 11px;
-  cursor: pointer;
+  flex: 0 0 auto !important;
+  padding: 6px 12px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 80%, transparent) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--zai-text) !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
   transition:
     background-color 0.15s var(--zai-ease),
     border-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-suggestion-chip:hover {
-  background: var(--zai-hover);
-  border-color: var(--zai-primary);
+  background: var(--zai-hover) !important;
+  border-color: var(--zai-primary) !important;
 }
 
 .zoteroai-suggestion-chip:active {
-  transform: scale(0.97);
+  transform: scale(0.97) !important;
 }
 
 .zoteroai-scroll-bottom {
-  position: absolute;
-  right: 18px;
-  bottom: 94px;
-  z-index: 5;
-  border: 1px solid var(--zai-outline);
-  background: var(--zai-surface);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 13%);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(5px);
+  position: absolute !important;
+  right: 18px !important;
+  bottom: 94px !important;
+  z-index: 5 !important;
+  border: 1px solid var(--zai-outline) !important;
+  background: var(--zai-surface) !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 13%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(5px) !important;
 }
 
 .zoteroai-scroll-bottom.zoteroai-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateY(0) !important;
 }
 
 /* Prompt preset bottom sheet */
 .zoteroai-prompts-scrim {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: rgb(20 22 25 / 28%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.22s var(--zai-ease);
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 20 !important;
+  background: rgb(20 22 25 / 28%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.22s var(--zai-ease) !important;
 }
 
 .zoteroai-prompts-drawer {
-  position: absolute;
-  top: auto;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-  z-index: 21;
-  display: flex;
-  max-height: clamp(180px, 48%, 380px);
-  flex-direction: column;
-  overflow: hidden;
-  padding: 7px 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--zai-outline) 72%, transparent);
-  border-radius: 20px 20px 12px 12px;
-  background: var(--zai-surface);
-  box-shadow: 0 12px 38px rgb(0 0 0 / 24%);
-  opacity: 0;
-  pointer-events: none;
-  visibility: hidden;
-  transform: translateY(calc(100% + 18px));
+  position: absolute !important;
+  top: auto !important;
+  right: 10px !important;
+  bottom: 10px !important;
+  left: 10px !important;
+  z-index: 21 !important;
+  display: flex !important;
+  max-height: clamp(180px, 48%, 380px) !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 7px 10px 12px !important;
+  border: 1px solid color-mix(in srgb, var(--zai-outline) 72%, transparent) !important;
+  border-radius: 20px 20px 12px 12px !important;
+  background: var(--zai-surface) !important;
+  box-shadow: 0 12px 38px rgb(0 0 0 / 24%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  transform: translateY(calc(100% + 18px)) !important;
   transition:
     transform 0.26s var(--zai-ease),
     opacity 0.2s var(--zai-ease),
-    visibility 0s linear 0.26s;
+    visibility 0s linear 0.26s !important;
 }
 
 .zoteroai-prompts-open .zoteroai-prompts-scrim {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .zoteroai-prompts-open .zoteroai-prompts-drawer {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
-  transform: translateY(0);
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  transform: translateY(0) !important;
   transition:
     transform 0.26s var(--zai-ease),
     opacity 0.2s var(--zai-ease),
-    visibility 0s;
+    visibility 0s !important;
 }
 
 .zoteroai-prompts-handle {
-  width: 34px;
-  height: 4px;
-  flex: 0 0 auto;
-  margin: 0 auto 3px;
-  border-radius: 999px;
-  background: var(--zai-outline);
-  opacity: 0.7;
+  width: 34px !important;
+  height: 4px !important;
+  flex: 0 0 auto !important;
+  margin: 0 auto 3px !important;
+  border-radius: 999px !important;
+  background: var(--zai-outline) !important;
+  opacity: 0.7 !important;
 }
 
 .zoteroai-prompts-head {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 2px 4px 6px;
+  display: flex !important;
+  min-height: 38px !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 2px 4px 6px !important;
 }
 
 .zoteroai-prompts-title {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 600;
+  flex: 1 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
 }
 
 /* Composer */
 .zoteroai-composer {
-  width: 100%;
-  max-width: 100%;
-  flex: 0 0 auto;
-  padding: 10px clamp(14px, 5%, 26px) 12px;
-  background: linear-gradient(to bottom, transparent, var(--zai-surface) 16%);
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  padding: 10px clamp(14px, 5%, 26px) 12px !important;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--zai-surface) 16%
+  ) !important;
 }
 
 .zoteroai-quick-prompts {
-  display: grid;
-  min-height: 0;
-  grid-template-columns: 1fr;
-  gap: 5px;
-  overflow-y: auto;
-  padding: 2px 3px 5px;
-  scrollbar-width: thin;
+  display: grid !important;
+  min-height: 0 !important;
+  grid-template-columns: 1fr !important;
+  gap: 5px !important;
+  overflow-y: auto !important;
+  padding: 2px 3px 5px !important;
+  scrollbar-width: thin !important;
 }
 
 .zoteroai-quick-btn {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  padding: 9px 11px;
-  border: 0;
-  border-radius: var(--zai-radius-m);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
+  display: flex !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  padding: 9px 11px !important;
+  border: 0 !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  text-align: left !important;
   transition:
     background-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-quick-btn:hover {
-  background: var(--zai-hover);
+  background: var(--zai-hover) !important;
 }
 
 .zoteroai-quick-btn:active {
-  background: var(--zai-pressed);
-  transform: scale(0.99);
+  background: var(--zai-pressed) !important;
+  transform: scale(0.99) !important;
 }
 
 .zoteroai-quick-label {
-  overflow: hidden;
-  color: var(--zai-text);
-  font-size: 12px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: hidden !important;
+  color: var(--zai-text) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .zoteroai-quick-preview {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--zai-muted);
-  font-size: 10px;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  color: var(--zai-muted) !important;
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
 }
 
 .zoteroai-input-shell {
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  padding: 5px;
-  border: 1px solid transparent;
-  border-radius: var(--zai-radius-xl);
-  background: var(--zai-surface-mid);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 6%);
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 2px !important;
+  padding: 5px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--zai-radius-xl) !important;
+  background: var(--zai-surface-mid) !important;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 6%) !important;
   transition:
     border-color 0.18s var(--zai-ease),
-    box-shadow 0.18s var(--zai-ease);
+    box-shadow 0.18s var(--zai-ease) !important;
 }
 
 .zoteroai-input-shell:focus-within {
-  border-color: color-mix(in srgb, var(--zai-primary) 65%, transparent);
-  background: var(--zai-surface);
+  border-color: color-mix(
+    in srgb,
+    var(--zai-primary) 65%,
+    transparent
+  ) !important;
+  background: var(--zai-surface) !important;
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--zai-primary) 34%, transparent),
-    0 3px 12px rgb(11 87 208 / 8%);
+    0 3px 12px rgb(11 87 208 / 8%) !important;
 }
 
 .zoteroai-input {
-  height: 36px;
-  min-width: 0;
-  min-height: 36px;
-  max-height: 144px;
-  flex: 1;
-  align-self: stretch;
-  margin: 0;
-  padding: 8px 6px;
-  overflow-y: auto;
-  border: 0;
+  height: 36px !important;
+  min-width: 0 !important;
+  min-height: 36px !important;
+  max-height: 144px !important;
+  flex: 1 !important;
+  align-self: stretch !important;
+  margin: 0 !important;
+  padding: 8px 6px !important;
+  overflow-y: auto !important;
+  border: 0 !important;
   outline: 0 !important;
-  resize: none;
-  background: transparent;
-  color: var(--zai-text);
-  line-height: 20px;
-  vertical-align: middle;
-  appearance: none;
+  resize: none !important;
+  background: transparent !important;
+  color: var(--zai-text) !important;
+  line-height: 20px !important;
+  vertical-align: middle !important;
+  appearance: none !important;
   box-shadow: none !important;
 }
 
 .zoteroai-input::placeholder {
-  color: var(--zai-muted);
-  line-height: 20px;
-  opacity: 1;
+  color: var(--zai-muted) !important;
+  line-height: 20px !important;
+  opacity: 1 !important;
 }
 
 .zoteroai-prompts-trigger,
 .zoteroai-insert-selection,
 .zoteroai-btn-action {
-  width: 36px;
-  height: 36px;
+  width: 36px !important;
+  height: 36px !important;
 }
 
 .zoteroai-prompts-trigger:hover,
 .zoteroai-insert-selection:hover {
-  background: var(--zai-hover);
+  background: var(--zai-hover) !important;
 }
 
 .zoteroai-btn-action.zoteroai-mode-send {
-  background: var(--zai-primary);
-  color: var(--zai-surface);
+  background: var(--zai-primary) !important;
+  color: var(--zai-surface) !important;
 }
 
 .zoteroai-btn-action.zoteroai-mode-send:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--zai-primary) 88%, #000);
-  box-shadow: 0 2px 7px color-mix(in srgb, var(--zai-primary) 25%, transparent);
+  background: color-mix(in srgb, var(--zai-primary) 88%, #000) !important;
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--zai-primary) 25%, transparent) !important;
 }
 
 .zoteroai-btn-action.zoteroai-mode-stop {
-  background: var(--zai-error);
-  color: var(--zai-surface);
+  background: var(--zai-error) !important;
+  color: var(--zai-surface) !important;
 }
 
 .zoteroai-btn-action.zoteroai-mode-stop:hover {
-  background: color-mix(in srgb, var(--zai-error) 88%, #000);
+  background: color-mix(in srgb, var(--zai-error) 88%, #000) !important;
 }
 
 .zoteroai-context-meter {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 5px 0;
-  color: var(--zai-muted);
-  font-size: 10px;
+  display: flex !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 5px 0 !important;
+  color: var(--zai-muted) !important;
+  font-size: 10px !important;
 }
 
 .zoteroai-context-track {
-  min-width: 36px;
-  flex: 1;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--zai-surface-high);
+  min-width: 36px !important;
+  flex: 1 !important;
+  height: 3px !important;
+  overflow: hidden !important;
+  border-radius: 999px !important;
+  background: var(--zai-surface-high) !important;
 }
 
 .zoteroai-context-fill {
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--zai-primary);
+  width: 0 !important;
+  height: 100% !important;
+  border-radius: inherit !important;
+  background: var(--zai-primary) !important;
   transition:
     width 0.2s var(--zai-ease),
-    background-color 0.2s var(--zai-ease);
+    background-color 0.2s var(--zai-ease) !important;
 }
 
 .zoteroai-context-meter[data-level="warning"] .zoteroai-context-fill {
-  background: var(--zai-warning);
+  background: var(--zai-warning) !important;
 }
 
 .zoteroai-context-meter[data-level="danger"] {
-  color: var(--zai-error);
+  color: var(--zai-error) !important;
 }
 
 .zoteroai-context-meter[data-level="danger"] .zoteroai-context-fill {
-  background: var(--zai-error);
+  background: var(--zai-error) !important;
 }
 
 .zoteroai-context-meter-label {
-  min-width: 0;
-  max-width: 58%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0 !important;
+  max-width: 58% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .zoteroai-live-region {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
 }
 
 .zoteroai-snackbar {
-  position: absolute;
-  right: 12px;
-  bottom: 92px;
-  left: 12px;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 12px;
-  border-radius: var(--zai-radius-m);
-  background: #303134;
-  box-shadow: 0 4px 18px rgb(0 0 0 / 24%);
-  color: #fff;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(8px);
+  position: absolute !important;
+  right: 12px !important;
+  bottom: 92px !important;
+  left: 12px !important;
+  z-index: 40 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 9px 12px !important;
+  border-radius: var(--zai-radius-m) !important;
+  background: #303134 !important;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 24%) !important;
+  color: #fff !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(8px) !important;
   transition:
     opacity 0.18s var(--zai-ease),
-    transform 0.18s var(--zai-ease);
+    transform 0.18s var(--zai-ease) !important;
 }
 
 .zoteroai-snackbar.zoteroai-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateY(0) !important;
 }
 
 .zoteroai-snackbar button {
-  padding: 3px 7px;
-  border: 0;
-  background: transparent;
-  color: #a8c7fa;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 7px;
+  padding: 3px 7px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #a8c7fa !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  border-radius: 7px !important;
   transition:
     background-color 0.15s var(--zai-ease),
-    transform 0.1s var(--zai-ease);
+    transform 0.1s var(--zai-ease) !important;
 }
 
 .zoteroai-snackbar button:hover {
-  background: rgb(255 255 255 / 10%);
+  background: rgb(255 255 255 / 10%) !important;
 }
 
 .zoteroai-snackbar button:active {
-  transform: scale(0.96);
+  transform: scale(0.96) !important;
 }
 
 #zoteroai-view-panel.hidden {
@@ -1407,21 +1436,21 @@
 @media (max-width: 300px) {
   .zoteroai-header,
   .zoteroai-composer {
-    padding-right: 8px;
-    padding-left: 8px;
+    padding-right: 8px !important;
+    padding-left: 8px !important;
   }
 
   .zoteroai-context-row {
-    flex-wrap: wrap;
+    flex-wrap: wrap !important;
   }
 
   .zoteroai-context-badge {
-    flex-basis: calc(100% - 58px);
+    flex-basis: calc(100% - 58px) !important;
   }
 
   .zoteroai-messages {
-    padding-right: 14px;
-    padding-left: 14px;
+    padding-right: 14px !important;
+    padding-left: 14px !important;
   }
 }
 
