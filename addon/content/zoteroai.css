@@ -18,7 +18,7 @@
   --zai-radius-s: 8px !important;
   --zai-radius-m: 12px !important;
   --zai-radius-l: 18px !important;
-  --zai-radius-xl: 26px !important;
+  --zai-radius-xl: 28px !important;
   --zai-ease: cubic-bezier(0.2, 0, 0, 1) !important;
 
   position: relative !important;
@@ -36,7 +36,7 @@
     "Segoe UI",
     sans-serif !important;
   font-size: 14px !important;
-  line-height: 1.55 !important;
+  line-height: 1.6 !important;
   -moz-user-select: text !important;
   user-select: text !important;
 }
@@ -578,7 +578,7 @@
   min-height: 0 !important;
   flex: 1 !important;
   flex-direction: column !important;
-  gap: 20px !important;
+  gap: 24px !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   padding: 22px clamp(24px, 8%, 44px) 32px !important;
@@ -1253,7 +1253,7 @@
   display: flex !important;
   align-items: flex-end !important;
   gap: 2px !important;
-  padding: 5px !important;
+  padding: 6px !important;
   border: 1px solid transparent !important;
   border-radius: var(--zai-radius-xl) !important;
   background: var(--zai-surface-mid) !important;
@@ -1276,21 +1276,21 @@
 }
 
 .zoteroai-input {
-  height: 36px !important;
+  height: 40px !important;
   min-width: 0 !important;
-  min-height: 36px !important;
+  min-height: 40px !important;
   max-height: 144px !important;
   flex: 1 !important;
   align-self: stretch !important;
   margin: 0 !important;
-  padding: 8px 6px !important;
+  padding: 9px 8px !important;
   overflow-y: auto !important;
   border: 0 !important;
   outline: 0 !important;
   resize: none !important;
   background: transparent !important;
   color: var(--zai-text) !important;
-  line-height: 20px !important;
+  line-height: 22px !important;
   vertical-align: middle !important;
   appearance: none !important;
   box-shadow: none !important;
@@ -1298,15 +1298,15 @@
 
 .zoteroai-input::placeholder {
   color: var(--zai-muted) !important;
-  line-height: 20px !important;
+  line-height: 22px !important;
   opacity: 1 !important;
 }
 
 .zoteroai-prompts-trigger,
 .zoteroai-insert-selection,
 .zoteroai-btn-action {
-  width: 36px !important;
-  height: 36px !important;
+  width: 40px !important;
+  height: 40px !important;
 }
 
 .zoteroai-prompts-trigger:hover,
