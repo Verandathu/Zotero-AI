@@ -138,7 +138,7 @@
   width: 100% !important;
   max-width: 100% !important;
   flex: 0 0 auto !important;
-  padding: 8px clamp(16px, 5%, 26px) 6px !important;
+  padding: 8px clamp(20px, 6%, 32px) 6px !important;
   background: color-mix(
     in srgb,
     var(--zai-surface) 94%,
@@ -1173,7 +1173,7 @@
   width: 100% !important;
   max-width: 100% !important;
   flex: 0 0 auto !important;
-  padding: 10px clamp(14px, 5%, 26px) 12px !important;
+  padding: 10px clamp(20px, 6%, 32px) 12px !important;
   background: linear-gradient(
     to bottom,
     transparent,

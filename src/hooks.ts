@@ -17,12 +17,13 @@ function registerStylesheet() {
   styleSheetURI = Services.io.newURI(
     `chrome://${addon.data.config.addonRef}/content/zoteroai.css`,
   );
-  // Register at USER origin so the `!important` declarations in zoteroai.css
-  // outrank Zotero's own author-origin element rules (textarea/button/input
-  // padding, line-height, box sizing). Plain user-origin rules alone still
-  // lose to author-origin normal rules — `!important` is what wins the cascade.
-  if (!sss.sheetRegistered(styleSheetURI, sss.USER_SHEET)) {
-    sss.loadAndRegisterSheet(styleSheetURI, sss.USER_SHEET);
+  // Register at AGENT (user-agent) origin. Combined with the `!important`
+  // declarations in zoteroai.css, this yields *user-agent important* rules —
+  // the highest cascade priority — so they outrank Zotero's own element rules
+  // (textarea/button/input padding, line-height, box sizing) in every case,
+  // including when Zotero itself uses `!important`.
+  if (!sss.sheetRegistered(styleSheetURI, sss.AGENT_SHEET)) {
+    sss.loadAndRegisterSheet(styleSheetURI, sss.AGENT_SHEET);
   }
 }
 
@@ -33,8 +34,12 @@ function unregisterStylesheet() {
   const sss = (Components as any).classes[
     "@mozilla.org/content/style-sheet-service;1"
   ].getService(Components.interfaces.nsIStyleSheetService);
-  if (sss.sheetRegistered(styleSheetURI, sss.USER_SHEET)) {
-    sss.unregisterSheet(styleSheetURI, sss.USER_SHEET);
+  // Remove from both origins to clean up any lingering registration left by
+  // an earlier version of this plugin (the origin changed during development).
+  for (const origin of [sss.AGENT_SHEET, sss.USER_SHEET]) {
+    if (sss.sheetRegistered(styleSheetURI, origin)) {
+      sss.unregisterSheet(styleSheetURI, origin);
+    }
   }
   styleSheetURI = undefined;
 }
