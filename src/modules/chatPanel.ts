@@ -45,7 +45,7 @@ const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
   edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z"/><path d="m13.5 7 3.5 3.5"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/>',
-  copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   retry: '<path d="M20 6v5h-5"/><path d="M19 11a8 8 0 1 0 1 5"/>',
   send: '<path d="m4 4 17 8-17 8 3-8-3-8Z"/><path d="M7 12h14"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1"/>',
@@ -665,13 +665,18 @@ export class ChatPanel {
     this.closeHistory(ctx, false);
     ctx.promptReturnFocus = trigger;
     trigger.setAttribute("aria-expanded", "true");
-    ctx.body.classList.add("zoteroai-prompts-open");
+    // Render content *before* toggling the open class so the drawer's height
+    // is settled before the transform transition starts — rendering mid-
+    // animation changes the drawer height and makes the slide janky.
+    this.renderQuickPrompts(ctx);
     const drawer = ctx.body.querySelector(
       ".zoteroai-prompts-drawer",
     ) as HTMLElement;
     drawer.setAttribute("aria-hidden", "false");
-    this.renderQuickPrompts(ctx);
-    (drawer.querySelector(".zoteroai-quick-btn") as HTMLButtonElement)?.focus();
+    ctx.body.classList.add("zoteroai-prompts-open");
+    (drawer.querySelector(".zoteroai-quick-btn") as HTMLButtonElement)?.focus({
+      preventScroll: true,
+    });
   }
 
   private closePrompts(ctx: PanelContext, restoreFocus = true) {

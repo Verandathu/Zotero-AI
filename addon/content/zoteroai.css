@@ -57,9 +57,7 @@
   user-select: none !important;
 }
 
-.zoteroai-root button:focus-visible,
-.zoteroai-root input:focus-visible,
-.zoteroai-root textarea:focus-visible {
+.zoteroai-root button:focus-visible {
   outline: 2px solid var(--zai-primary) !important;
   outline-offset: 2px !important;
 }
@@ -247,13 +245,19 @@
   opacity: 0 !important;
 }
 
-/* Clear, high-contrast ON state so the setting is obvious at a glance */
-.zoteroai-toggle-pill[data-checked="true"],
-.zoteroai-toggle-pill:focus-within {
+/* Clear, high-contrast ON state so the setting is obvious at a glance.
+   Do NOT tie this to :focus-within — a focused-but-unchecked pill would then
+   stay blue and appear impossible to toggle off. */
+.zoteroai-toggle-pill[data-checked="true"] {
   color: #fff !important;
   background: var(--zai-primary) !important;
   border-color: var(--zai-primary) !important;
   font-weight: 600 !important;
+}
+
+.zoteroai-toggle-pill:focus-within {
+  outline: 2px solid var(--zai-primary) !important;
+  outline-offset: 2px !important;
 }
 
 .zoteroai-toggle-pill[data-checked="true"]::before {
@@ -772,9 +776,8 @@
   display: flex !important;
   gap: 2px !important;
   align-items: center !important;
-  min-height: 26px !important;
+  min-height: 24px !important;
   margin-top: 4px !important;
-  line-height: 0 !important;
 }
 
 .zoteroai-msg-user .zoteroai-msg-footer {
@@ -785,13 +788,20 @@
 
 .zoteroai-msg-footer .zoteroai-icon-btn {
   display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   width: 26px !important;
   height: 26px !important;
   padding: 0 !important;
+  margin: 0 !important;
+  vertical-align: middle !important;
   opacity: 0.6 !important;
 }
 
 .zoteroai-msg-footer .zoteroai-icon-btn .zoteroai-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   width: 16px !important;
   height: 16px !important;
 }
@@ -1110,7 +1120,7 @@
   left: 10px !important;
   z-index: 21 !important;
   display: flex !important;
-  max-height: clamp(180px, 48%, 380px) !important;
+  max-height: min(46%, 360px) !important;
   flex-direction: column !important;
   overflow: hidden !important;
   padding: 7px 10px 12px !important;
@@ -1122,6 +1132,7 @@
   pointer-events: none !important;
   visibility: hidden !important;
   transform: translateY(calc(100% + 18px)) !important;
+  will-change: transform, opacity !important;
   transition:
     transform 0.26s var(--zai-ease),
     opacity 0.2s var(--zai-ease),
