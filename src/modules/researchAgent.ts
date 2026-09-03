@@ -84,7 +84,7 @@ function itemYear(item: Zotero.Item): string {
     const date = item.getField("date");
     const match = date?.match(/\b(1[89]\d{2}|20\d{2})\b/);
     return match ? match[1] : date || "";
-  } catch (e) {
+  } catch {
     return "";
   }
 }
@@ -292,7 +292,7 @@ export class ResearchAgent {
         .map((c: any) => `${c.firstName || ""} ${c.lastName || ""}`.trim())
         .filter(Boolean)
         .join(", ");
-    } catch (e) {
+    } catch {
       return "";
     }
   }
@@ -300,7 +300,7 @@ export class ResearchAgent {
   private abstractOf(item: Zotero.Item): string {
     try {
       return item.getField("abstractNote") || "";
-    } catch (e) {
+    } catch {
       return "";
     }
   }

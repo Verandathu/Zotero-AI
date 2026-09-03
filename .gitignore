@@ -14,7 +14,7 @@ tsconfig.tsbuildinfo
 .scaffold
 build
 logs
+.scaffold/zotero9-*.js
+
 # Local debug output captures
 DebugOutput/
-.scaffold/zotero9-*.js
-.env

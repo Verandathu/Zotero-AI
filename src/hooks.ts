@@ -89,7 +89,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
         event: string,
         type: string,
         ids: Array<string | number>,
-        extraData: any,
+        _extraData: any,
       ) => {
         if (!addon?.data.alive) {
           Zotero.Notifier.unregisterObserver(notifierID);
@@ -111,7 +111,7 @@ function registerPrefs() {
   });
 }
 
-async function onMainWindowUnload(win: Window): Promise<void> {
+async function onMainWindowUnload(_win: Window): Promise<void> {
   ztoolkit.unregisterAll();
 }
 

@@ -122,7 +122,7 @@ export class ContextProvider {
         if (parent?.isRegularItem()) {
           return parent;
         }
-      } catch (e) {
+      } catch {
         // Fall through to the attachment itself
       }
     }
@@ -143,7 +143,7 @@ export class ContextProvider {
     try {
       const source = this.sourceItem(item);
       return source.getField("title") || source.getDisplayTitle?.() || "";
-    } catch (e) {
+    } catch {
       return "";
     }
   }
@@ -246,7 +246,7 @@ export class ContextProvider {
             `${field === "abstractNote" ? "Abstract" : field}: ${value}`,
           );
         }
-      } catch (e) {
+      } catch {
         // Skip fields not present on this item type
       }
     }

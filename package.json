@@ -1,8 +1,8 @@
 {
   "name": "zotero-ai",
   "type": "module",
-  "version": "0.1.0",
-  "description": "AI assistant for Zotero: context-aware chat, full-text analysis, and quick actions",
+  "version": "1.0.0-beta.1",
+  "description": "AI assistant for Zotero: context-aware chat, full-text analysis, cross-document research, and quick actions",
   "config": {
     "addonName": "Zotero AI",
     "addonID": "zoteroai@zixuwang",
@@ -12,13 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-plugin-template.git"
+    "url": "git+https://github.com/Verandathu/Zotero-AI.git"
   },
-  "author": "windingwind",
+  "author": "Zixu Wang",
   "bugs": {
-    "url": "https://github.com/windingwind/zotero-plugin-template/issues"
+    "url": "https://github.com/Verandathu/Zotero-AI/issues"
   },
-  "homepage": "https://github.com/windingwind/zotero-plugin-template#readme",
+  "homepage": "https://github.com/Verandathu/Zotero-AI#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",

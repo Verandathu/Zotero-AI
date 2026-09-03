@@ -239,7 +239,7 @@ export class ApiClient {
         // AbortController unavailable; polling flag for stop requests
         try {
           await reader.cancel();
-        } catch (e) {
+        } catch {
           // Ignore
         }
         break;

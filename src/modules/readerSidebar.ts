@@ -59,7 +59,7 @@ export class ReaderSidebarInjector {
         const doc = (reader as any)._iframeWindow?.document;
         doc?.getElementById(BTN_ID)?.remove();
         doc?.getElementById(PANEL_ID)?.remove();
-      } catch (e) {
+      } catch {
         // Ignore
       }
     }
@@ -70,7 +70,7 @@ export class ReaderSidebarInjector {
     for (const entry of this.observers) {
       try {
         entry.ob.disconnect();
-      } catch (e) {
+      } catch {
         // Reader document may already be gone
       }
       const content = entry.content;
